@@ -4,6 +4,8 @@ frontend:
     preBuild:
       commands:
         - npm ci
+        - npm run build --workspace=@getnear/config
+        - npm run build --workspace=@getnear/validation
     build:
       commands:
         - npm run build --workspace=@getnear/web
