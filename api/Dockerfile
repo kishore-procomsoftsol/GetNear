@@ -1,29 +1,32 @@
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy root workspace files
 COPY package.json package-lock.json turbo.json ./
+COPY tsconfig.json ./
 COPY packages/ ./packages/
 COPY api/ ./api/
 
-# Install all dependencies (workspace-aware)
 RUN npm ci
 
-# Build the API
+RUN npm run build --workspace=@getnear/config
+RUN npm run build --workspace=@getnear/validation
 RUN npm run build --workspace=api
 
-# ─── Production stage ─────────────────────────────────────────────────────────
-FROM node:18-alpine AS runner
+FROM node:20-alpine AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy built output and production dependencies
 COPY --from=builder /app/api/dist ./dist
 COPY --from=builder /app/api/package.json ./package.json
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/validation/dist ./node_modules/@getnear/validation/dist
+COPY --from=builder /app/packages/validation/package.json ./node_modules/@getnear/validation/package.json
+COPY --from=builder /app/packages/config/dist ./node_modules/@getnear/config/dist
+COPY --from=builder /app/packages/config/package.json ./node_modules/@getnear/config/package.json
+COPY --from=builder /app/api/firebase-service-account.json ./firebase-service-account.json
 
 EXPOSE 4000
 

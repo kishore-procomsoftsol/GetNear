@@ -61,3 +61,6 @@ supabase/.temp/
 *.pem
 .cache/
 api/firebase-service-account.json
+Archive.zip
+GetNear-full.zip
+*.zip

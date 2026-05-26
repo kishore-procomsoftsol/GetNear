@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-amplify/adapter-nextjs": "^1.7.3",
     "axios": "^1.7.2",
     "next": "14.2.4",
     "react": "^18.3.1",

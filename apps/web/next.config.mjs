@@ -1,3 +1,5 @@
+import { withAmplifyHosting } from '@aws-amplify/adapter-nextjs';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
@@ -22,4 +24,4 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+export default withAmplifyHosting(nextConfig);

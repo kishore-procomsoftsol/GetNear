@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-amplify/adapter-nextjs": "^1.7.3",
     "@getnear/config": "*",
     "@getnear/types": "*",
     "@getnear/validation": "*",
