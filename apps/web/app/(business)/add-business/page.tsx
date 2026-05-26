@@ -37,7 +37,7 @@ const step1Schema = z.object({
   description: z.string().max(500, 'Description must be 500 characters or less').optional(),
 })
 
-export const locationStepSchema = z.object({
+const locationStepSchema = z.object({
   lat: z.number().min(-90, 'Latitude must be between -90 and 90').max(90, 'Latitude must be between -90 and 90'),
   lng: z.number().min(-180, 'Longitude must be between -180 and 180').max(180, 'Longitude must be between -180 and 180'),
   address: z.string().min(1, 'Address is required'),
