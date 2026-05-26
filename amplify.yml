@@ -10,7 +10,7 @@ frontend:
       commands:
         - npm run build --workspace=@getnear/web
   artifacts:
-    baseDirectory: apps/web/.next/standalone
+    baseDirectory: apps/web/.next
     files:
       - '**/*'
   cache:
