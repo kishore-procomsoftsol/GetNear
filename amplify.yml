@@ -9,7 +9,6 @@ frontend:
     build:
       commands:
         - npm run build --workspace=@getnear/web
-        - ls -la apps/web/.next/
   artifacts:
     baseDirectory: apps/web/.next
     files:
