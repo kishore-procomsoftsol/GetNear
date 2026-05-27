@@ -9,6 +9,9 @@ frontend:
     build:
       commands:
         - cd apps/web && npx next build
+        - ls -la apps/web/.next/ || echo "no .next folder"
+        - ls -la apps/web/.amplify-hosting/ 2>/dev/null || echo "no .amplify-hosting folder"
+        - cat apps/web/.next/required-server-files.json 2>/dev/null || echo "no required-server-files.json"
   artifacts:
     baseDirectory: apps/web/.next
     files:
@@ -16,4 +19,3 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
-      - apps/web/.next/cache/**/*
