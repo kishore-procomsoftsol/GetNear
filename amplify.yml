@@ -8,10 +8,8 @@ frontend:
         - npm run build --workspace=@getnear/validation
     build:
       commands:
-        - cd apps/web && npx next build
-        - ls -la apps/web/.next/ || echo "no .next folder"
-        - ls -la apps/web/.amplify-hosting/ 2>/dev/null || echo "no .amplify-hosting folder"
-        - cat apps/web/.next/required-server-files.json 2>/dev/null || echo "no required-server-files.json"
+        - npm run build --workspace=@getnear/web
+        - ls -la apps/web/.next/
   artifacts:
     baseDirectory: apps/web/.next
     files:
