@@ -24,6 +24,9 @@ app.use(helmet());
 
 // ─── CORS (design §13.4) ─────────────────────────────────────────────────────
 const allowedOrigins: string[] = [
+  'https://getnear.ai',
+  'https://www.getnear.ai',
+  'https://admin.getnear.ai',
   'https://getnear.in',
   'https://admin.getnear.in',
   'http://localhost:3000',
