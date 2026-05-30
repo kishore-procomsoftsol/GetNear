@@ -10,9 +10,11 @@ import { sendOtpSchema, verifyOtpSchema } from '@getnear/validation';
 
 // Initialize Firebase Admin (only once)
 if (!admin.apps.length) {
-  const path = require('path');
-  const serviceAccountPath = path.join(process.cwd(), 'firebase-service-account.json');
-  const serviceAccount = require(serviceAccountPath);
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!serviceAccountJson) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set');
+  }
+  const serviceAccount = JSON.parse(serviceAccountJson);
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
   });
