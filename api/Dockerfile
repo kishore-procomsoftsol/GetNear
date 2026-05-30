@@ -26,7 +26,6 @@ COPY --from=builder /app/packages/validation/dist ./node_modules/@getnear/valida
 COPY --from=builder /app/packages/validation/package.json ./node_modules/@getnear/validation/package.json
 COPY --from=builder /app/packages/config/dist ./node_modules/@getnear/config/dist
 COPY --from=builder /app/packages/config/package.json ./node_modules/@getnear/config/package.json
-COPY --from=builder /app/api/firebase-service-account.json ./firebase-service-account.json
 
 EXPOSE 4000
 
