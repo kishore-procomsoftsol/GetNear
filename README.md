@@ -132,3 +132,4 @@ GetNear Plus is the paid subscription tier. Free-tier limits:
 ## License
 
 Private — All rights reserved.
+# Deployed from GitHub
