@@ -13,33 +13,30 @@ env:
   ECR_REPOSITORY: getnear-web
   ECS_SERVICE: getnear-web
   ECS_CLUSTER: default
+  ECS_TASK_DEFINITION: default-getnear-web
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
+      - name: Login to ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image to ECR
+      - name: Build and push
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build \
-            --platform linux/amd64 \
+          docker build --platform linux/amd64 \
             --build-arg NEXT_PUBLIC_API_URL=https://api.getnear.ai/api/v1 \
             --build-arg NEXT_PUBLIC_APP_URL=https://getnear.ai \
             --build-arg NEXT_PUBLIC_ADMIN_URL=https://admin.getnear.ai \
@@ -50,10 +47,16 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Force new ECS deployment
+      - name: Deploy to ECS
         run: |
-          aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $ECS_SERVICE \
-            --force-new-deployment \
-            --region $AWS_REGION
+          IMAGE="211125388599.dkr.ecr.ap-south-1.amazonaws.com/$ECR_REPOSITORY:latest"
+          TASK_DEF=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --region $AWS_REGION --query 'taskDefinition' --output json)
+          NEW_TASK_DEF=$(echo $TASK_DEF | python3 -c "
+          import json,sys
+          td=json.load(sys.stdin)
+          for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']:
+            td.pop(k,None)
+          td['containerDefinitions'][0]['image']='$IMAGE'
+          print(json.dumps(td))")
+          aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --region $AWS_REGION
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition $ECS_TASK_DEFINITION --force-new-deployment --region $AWS_REGION
