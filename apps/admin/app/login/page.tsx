@@ -10,7 +10,7 @@ export default function AdminLoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.getnear.ai/api/v1'
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
