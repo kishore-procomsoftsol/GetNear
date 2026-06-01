@@ -1,19 +1,17 @@
 version: 1
-applications:
-  - frontend:
-      phases:
-        preBuild:
-          commands:
-            - npm ci
-        build:
-          commands:
-            - npm run build --workspace=@getnear/admin
-      artifacts:
-        baseDirectory: apps/admin/.next
-        files:
-          - '**/*'
-      cache:
-        paths:
-          - node_modules/**/*
-          - apps/admin/.next/cache/**/*
-    appRoot: .
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - echo "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
+        - npm run build --workspace=@getnear/admin
+  artifacts:
+    baseDirectory: apps/admin/.next
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
