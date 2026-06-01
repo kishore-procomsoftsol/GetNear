@@ -6,8 +6,7 @@ frontend:
         - npm ci
     build:
       commands:
-        - echo "Building admin with NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL"
-        - NEXT_PUBLIC_API_URL=https://api.getnear.ai/api/v1 npm run build --workspace=@getnear/admin
+        - npx turbo run build --filter=@getnear/admin
   artifacts:
     baseDirectory: apps/admin/.next
     files:
@@ -15,3 +14,4 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
+      - apps/admin/.next/cache/**/*
