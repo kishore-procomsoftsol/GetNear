@@ -38,6 +38,7 @@ jobs:
             --build-arg NEXT_PUBLIC_API_URL=https://api.getnear.ai/api/v1 \
             --build-arg NEXT_PUBLIC_APP_URL=https://getnear.ai \
             --build-arg NEXT_PUBLIC_ADMIN_URL=https://admin.getnear.ai \
+            --build-arg NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }} \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             -f apps/web/Dockerfile .

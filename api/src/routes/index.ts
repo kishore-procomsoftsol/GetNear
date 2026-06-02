@@ -53,6 +53,36 @@ router.get('/geocode', async (req, res) => {
   }
 });
 
+// Reverse geocode proxy (lat,lng → city name)
+router.get('/reverse-geocode', async (req, res) => {
+  const { lat, lng } = req.query;
+  if (!lat || !lng) return res.json({ data: null });
+
+  try {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return res.json({ data: null });
+
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === 'OK' && data.results?.length > 0) {
+      const components = data.results[0].address_components ?? [];
+      const locality = components.find((c: any) => c.types.includes('locality'));
+      const subLocality = components.find((c: any) => c.types.includes('sublocality_level_1'));
+      const adminArea2 = components.find((c: any) => c.types.includes('administrative_area_level_2'));
+      const adminArea1 = components.find((c: any) => c.types.includes('administrative_area_level_1'));
+
+      const city = subLocality?.long_name ?? locality?.long_name ?? adminArea2?.long_name ?? adminArea1?.long_name ?? null;
+
+      return res.json({ data: { city, formatted_address: data.results[0].formatted_address } });
+    }
+    return res.json({ data: null });
+  } catch {
+    return res.json({ data: null });
+  }
+});
+
 // Reviews are nested under businesses
 router.use('/businesses', reviewsRouter);
 

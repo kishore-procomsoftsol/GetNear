@@ -72,7 +72,7 @@ function FilterPill({ icon, label, active, onClick }: { icon: string; label: str
 export default function HomePage() {
   const router = useRouter()
   const { user } = useAuthStore()
-  const { city, lat, lng, radius, setRadius } = useLocationStore()
+  const { city, lat, lng, radius, setRadius, isLocating } = useLocationStore()
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null)
 
   const greeting = getGreeting()
@@ -146,7 +146,39 @@ export default function HomePage() {
           <button
             onClick={() => {
               if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(() => {})
+                const { setLocating, setLocation } = useLocationStore.getState()
+                setLocating(true)
+                navigator.geolocation.getCurrentPosition(
+                  async (position) => {
+                    const { latitude: lat, longitude: lng } = position.coords
+                    try {
+                      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+                      if (!apiKey) {
+                        setLocation(lat, lng)
+                        return
+                      }
+                      const url = new URL('https://maps.googleapis.com/maps/api/geocode/json')
+                      url.searchParams.set('latlng', `${lat},${lng}`)
+                      url.searchParams.set('key', apiKey)
+                      const res = await fetch(url.toString())
+                      if (!res.ok) throw new Error('Geocoding failed')
+                      const json = await res.json()
+                      let cityName: string | undefined
+                      if (json.status === 'OK' && json.results?.length > 0) {
+                        const components = json.results[0].address_components ?? []
+                        const locality = components.find((c: any) => c.types.includes('locality'))
+                        const adminArea2 = components.find((c: any) => c.types.includes('administrative_area_level_2'))
+                        const adminArea1 = components.find((c: any) => c.types.includes('administrative_area_level_1'))
+                        cityName = locality?.long_name ?? adminArea2?.long_name ?? adminArea1?.long_name
+                      }
+                      setLocation(lat, lng, cityName)
+                    } catch {
+                      setLocation(lat, lng)
+                    }
+                  },
+                  () => { setLocating(false) },
+                  { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60 * 1000 }
+                )
               }
             }}
             className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
@@ -158,10 +190,10 @@ export default function HomePage() {
           <MapPin className="h-5 w-5 text-primary flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-900 truncate">
-              {city || 'Detecting location...'}
+              {city ? city : isLocating ? 'Detecting location...' : lat != null ? 'Location detected' : 'Location not set'}
             </p>
             <p className="text-xs text-gray-500 truncate">
-              {city ? `${city}, India` : 'Allow location access for better results'}
+              {city ? `${city}, India` : isLocating ? 'Please wait...' : lat != null ? 'Tap "Use my location" to refresh' : 'Allow location access for better results'}
             </p>
           </div>
           <CitySelector />

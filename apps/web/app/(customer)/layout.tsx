@@ -59,44 +59,52 @@ export default function CustomerLayout({
         // Attempt reverse-geocoding to resolve city name
         try {
           const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-          if (!apiKey) {
-            // No API key — store coords without city name
-            setLocation(lat, lng)
-            return
-          }
-
-          const url = new URL(
-            'https://maps.googleapis.com/maps/api/geocode/json'
-          )
-          url.searchParams.set('latlng', `${lat},${lng}`)
-          url.searchParams.set('key', apiKey)
-
-          const res = await fetch(url.toString())
-          if (!res.ok) throw new Error('Geocoding request failed')
-
-          const json = await res.json()
 
           let city: string | undefined
 
-          if (json.status === 'OK' && json.results?.length > 0) {
-            // Walk address_components to find locality or administrative_area_level_2
-            const components: Array<{ long_name: string; types: string[] }> =
-              json.results[0].address_components ?? []
+          if (apiKey) {
+            // Direct Google Geocoding API call
+            const url = new URL(
+              'https://maps.googleapis.com/maps/api/geocode/json'
+            )
+            url.searchParams.set('latlng', `${lat},${lng}`)
+            url.searchParams.set('key', apiKey)
 
-            const locality = components.find((c) =>
-              c.types.includes('locality')
-            )
-            const adminArea2 = components.find((c) =>
-              c.types.includes('administrative_area_level_2')
-            )
-            const adminArea1 = components.find((c) =>
-              c.types.includes('administrative_area_level_1')
-            )
+            const res = await fetch(url.toString())
+            if (!res.ok) throw new Error('Geocoding request failed')
 
-            city =
-              locality?.long_name ??
-              adminArea2?.long_name ??
-              adminArea1?.long_name
+            const json = await res.json()
+
+            if (json.status === 'OK' && json.results?.length > 0) {
+              // Walk address_components to find locality or administrative_area_level_2
+              const components: Array<{ long_name: string; types: string[] }> =
+                json.results[0].address_components ?? []
+
+              const locality = components.find((c) =>
+                c.types.includes('locality')
+              )
+              const adminArea2 = components.find((c) =>
+                c.types.includes('administrative_area_level_2')
+              )
+              const adminArea1 = components.find((c) =>
+                c.types.includes('administrative_area_level_1')
+              )
+
+              city =
+                locality?.long_name ??
+                adminArea2?.long_name ??
+                adminArea1?.long_name
+            }
+          } else {
+            // Fallback: use the API's reverse geocode proxy
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.getnear.ai/api/v1'
+            const res = await fetch(`${apiUrl}/reverse-geocode?lat=${lat}&lng=${lng}`)
+            if (res.ok) {
+              const json = await res.json()
+              if (json.data?.city) {
+                city = json.data.city
+              }
+            }
           }
 
           setLocation(lat, lng, city)
