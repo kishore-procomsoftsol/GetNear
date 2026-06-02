@@ -11,9 +11,7 @@ on:
 env:
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: getnear-web
-  ECS_SERVICE: getnear-web
-  ECS_CLUSTER: default
-  ECS_TASK_DEFINITION: default-getnear-web
+  SERVICE_ARN: arn:aws:ecs:ap-south-1:211125388599:service/default/getnear-web
 
 jobs:
   deploy:
@@ -36,27 +34,23 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build --platform linux/amd64 \
+          docker build --no-cache --platform linux/amd64 \
             --build-arg NEXT_PUBLIC_API_URL=https://api.getnear.ai/api/v1 \
             --build-arg NEXT_PUBLIC_APP_URL=https://getnear.ai \
             --build-arg NEXT_PUBLIC_ADMIN_URL=https://admin.getnear.ai \
-            --build-arg NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }} \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
             -f apps/web/Dockerfile .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Deploy to ECS
+      - name: Deploy to Express service
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          IMAGE="211125388599.dkr.ecr.ap-south-1.amazonaws.com/$ECR_REPOSITORY:latest"
-          TASK_DEF=$(aws ecs describe-task-definition --task-definition $ECS_TASK_DEFINITION --region $AWS_REGION --query 'taskDefinition' --output json)
-          NEW_TASK_DEF=$(echo $TASK_DEF | python3 -c "
-          import json,sys
-          td=json.load(sys.stdin)
-          for k in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']:
-            td.pop(k,None)
-          td['containerDefinitions'][0]['image']='$IMAGE'
-          print(json.dumps(td))")
-          aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --region $AWS_REGION
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition $ECS_TASK_DEFINITION --force-new-deployment --region $AWS_REGION
+          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          aws ecs update-express-gateway-service \
+            --service-arn "$SERVICE_ARN" \
+            --primary-container "{\"image\":\"$IMAGE\",\"containerPort\":3000}" \
+            --region $AWS_REGION
