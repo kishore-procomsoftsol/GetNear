@@ -569,14 +569,14 @@ router.post('/users', async (req: Request, res: Response) => {
 
 router.post('/businesses', async (req: Request, res: Response) => {
   const adminId = req.user!.id;
-  const { name, category_id, type, description, phone, email, website, whatsapp, address, city, state, pin, lat, lng } = req.body;
+  const { name, category_id, type, description, phone, email, website, whatsapp, address, city, state, pin, lat, lng, owner_id } = req.body;
 
   if (!name || !address || !city) {
     return sendError(res, 'VALIDATION_ERROR', 'name, address, and city are required', 400);
   }
 
   const { data, error } = await supabaseAdmin.from('businesses').insert({
-    owner_id: adminId,
+    owner_id: owner_id || adminId,
     name,
     category_id: category_id ?? null,
     type: type ?? 'physical',
