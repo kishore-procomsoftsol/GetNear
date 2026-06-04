@@ -14,14 +14,20 @@ import { LazyMapView } from '@/components/maps/LazyMapView'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
-// Greeting
+// Greeting (client-only to avoid hydration mismatch)
 // ---------------------------------------------------------------------------
 
-function getGreeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning!'
-  if (hour < 17) return 'Good afternoon!'
-  return 'Good evening!'
+function useGreeting(): string {
+  const [greeting, setGreeting] = React.useState('')
+
+  React.useEffect(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) setGreeting('Good morning!')
+    else if (hour < 17) setGreeting('Good afternoon!')
+    else setGreeting('Good evening!')
+  }, [])
+
+  return greeting
 }
 
 // ---------------------------------------------------------------------------
@@ -75,7 +81,7 @@ export default function HomePage() {
   const { city, lat, lng, radius, setRadius, isLocating } = useLocationStore()
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null)
 
-  const greeting = getGreeting()
+  const greeting = useGreeting()
   const topCategories = CATEGORIES.filter((c) => c.parent_id === null).slice(0, 5)
 
   const quickAccessItems = [

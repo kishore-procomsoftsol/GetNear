@@ -172,10 +172,9 @@ router.post('/reviews/:id/reply', async (req, res) => {
   const { text } = req.body
   if (!text?.trim()) return sendError(res, 'VALIDATION_ERROR', 'Reply text is required', 400)
 
-  // For V1, store reply as metadata update on the review (simplified)
   const { error } = await supabaseAdmin
     .from('reviews')
-    .update({ updated_at: new Date().toISOString() })
+    .update({ reply_text: text.trim(), replied_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', id)
 
   if (error) return sendError(res, 'UPDATE_FAILED', error.message, 500)

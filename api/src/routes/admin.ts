@@ -525,8 +525,8 @@ router.post('/users', async (req: Request, res: Response) => {
         const { data, error } = await supabaseAdmin.from('users').insert({
           id: existingAuthUser.id,
           email,
-          name: name ?? null,
-          phone: phone ?? null,
+          name: name || null,
+          phone: phone?.trim() || null,
           role: userRole,
         }).select().single();
 
@@ -549,8 +549,8 @@ router.post('/users', async (req: Request, res: Response) => {
   const { data, error } = await supabaseAdmin.from('users').insert({
     id: authUser.user.id,
     email,
-    name: name ?? null,
-    phone: phone ?? null,
+    name: name || null,
+    phone: phone?.trim() || null,
     role: userRole,
   }).select().single();
 
