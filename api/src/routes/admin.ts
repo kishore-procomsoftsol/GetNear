@@ -397,7 +397,7 @@ router.get('/businesses/:id', async (req: Request, res: Response) => {
 router.put('/businesses/:id/update', async (req: Request, res: Response) => {
   const { id } = req.params;
   const adminId = req.user!.id;
-  const { name, description, phone, email, website, whatsapp, address, city, state, pin, category_id, type } = req.body;
+  const { name, description, phone, email, website, whatsapp, address, city, state, pin, category_id, type, lat, lng, owner_id } = req.body;
 
   const updates: Record<string, any> = { updated_at: new Date().toISOString() };
   if (name !== undefined) updates.name = name;
@@ -412,6 +412,10 @@ router.put('/businesses/:id/update', async (req: Request, res: Response) => {
   if (pin !== undefined) updates.pin = pin;
   if (category_id !== undefined) updates.category_id = category_id;
   if (type !== undefined) updates.type = type;
+  if (owner_id !== undefined) updates.owner_id = owner_id;
+  if (lat !== undefined && lng !== undefined) {
+    updates.location = `POINT(${lng} ${lat})`;
+  }
 
   const { data, error } = await supabaseAdmin
     .from('businesses')
