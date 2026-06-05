@@ -188,7 +188,26 @@ router.get('/:id', optionalAuth, async (req, res) => {
     if (!isOwner && !isAdmin) return sendError(res, 'NOT_FOUND', 'Business not found', 404)
   }
 
-  sendSuccess(res, business)
+  // Extract lat/lng from PostGIS location column
+  let lat: number | null = null
+  let lng: number | null = null
+  if (business.location) {
+    // PostGIS returns location as a string like "POINT(lng lat)" or as an object with coordinates
+    const loc = business.location as any
+    if (typeof loc === 'string') {
+      const match = loc.match(/POINT\(([^ ]+) ([^ ]+)\)/)
+      if (match) {
+        lng = parseFloat(match[1])
+        lat = parseFloat(match[2])
+      }
+    } else if (loc?.coordinates) {
+      // GeoJSON format: [lng, lat]
+      lng = loc.coordinates[0]
+      lat = loc.coordinates[1]
+    }
+  }
+
+  sendSuccess(res, { ...business, lat, lng })
 })
 
 /**
