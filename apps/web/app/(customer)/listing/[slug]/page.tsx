@@ -2,7 +2,6 @@
 
 import * as React from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
   ArrowLeft, Phone, Navigation, Bookmark, Globe, Share2,
   MessageCircle, Clock, MapPin, Flag,
@@ -13,6 +12,7 @@ import { RatingStars } from '@/components/shared/RatingStars'
 import { EnquiryForm } from '@/components/listings/EnquiryForm'
 import { PhotoGallery } from '@/components/listings/PhotoGallery'
 import { LazyMapView } from '@/components/maps/LazyMapView'
+import { ReviewsSection } from '@/components/listings/ReviewsSection'
 import apiClient from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 interface BusinessDetail {
   id: string
   name: string
+  slug?: string | null
   description: string | null
   phone: string | null
   email: string | null
@@ -46,6 +47,12 @@ interface BusinessDetail {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isUUID(value: string): boolean {
+  return UUID_V4_REGEX.test(value)
+}
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -72,33 +79,73 @@ function formatDistance(meters: number): string {
 // ---------------------------------------------------------------------------
 
 export default function ListingDetailPage() {
-  const { id } = useParams<{ id: string }>()
+  const { slug } = useParams<{ slug: string }>()
   const router = useRouter()
   const [business, setBusiness] = React.useState<BusinessDetail | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [saved, setSaved] = React.useState(false)
   const [showAllHours, setShowAllHours] = React.useState(false)
   const [showEnquiry, setShowEnquiry] = React.useState(false)
+  const [mapError, setMapError] = React.useState(false)
+
+  // Determine the URL identifier for this business (slug or fallback to id)
+  const businessSlug = business?.slug ?? business?.id ?? slug
 
   React.useEffect(() => {
-    apiClient.get<{ data: BusinessDetail }>(`/businesses/${id}`)
-      .then((res) => setBusiness(res.data.data))
-      .catch(() => setBusiness(null))
-      .finally(() => setLoading(false))
+    // If the param is a UUID, fetch business by UUID and redirect to slug URL
+    if (isUUID(slug)) {
+      apiClient.get<{ data: BusinessDetail }>(`/businesses/${slug}`)
+        .then((res) => {
+          const biz = res.data.data
+          if (biz.slug) {
+            // Redirect to the slug-based URL (requirement 2.6)
+            router.replace(`/listing/${biz.slug}`)
+          } else {
+            // Business has no slug — fallback to UUID URL (requirement 2.7)
+            setBusiness(biz)
+            setLoading(false)
+          }
+        })
+        .catch(() => {
+          setBusiness(null)
+          setLoading(false)
+        })
+    } else {
+      // Non-UUID: fetch business directly using slug (requirement 2.2)
+      apiClient.get<{ data: BusinessDetail }>(`/businesses/${slug}`)
+        .then((res) => setBusiness(res.data.data))
+        .catch(() => setBusiness(null))
+        .finally(() => setLoading(false))
+    }
 
     // Check if business is already saved
     apiClient.get<{ data: Array<{ businesses: { id: string } }> }>('/user/saved')
       .then((res) => {
         const savedIds = (res.data.data ?? []).map((s: any) => s.businesses?.id).filter(Boolean)
-        if (savedIds.includes(id)) {
+        const businessId = slug // Will be checked with current param
+        if (savedIds.includes(businessId)) {
           setSaved(true)
         }
       })
       .catch(() => {})
-  }, [id])
+  }, [slug, router])
+
+  // Update saved state when business loads (for UUID case where slug != id)
+  React.useEffect(() => {
+    if (!business) return
+    apiClient.get<{ data: Array<{ businesses: { id: string } }> }>('/user/saved')
+      .then((res) => {
+        const savedIds = (res.data.data ?? []).map((s: any) => s.businesses?.id).filter(Boolean)
+        if (savedIds.includes(business.id)) {
+          setSaved(true)
+        }
+      })
+      .catch(() => {})
+  }, [business?.id])
 
   const recordLead = async (type: string) => {
-    await apiClient.post(`/businesses/${id}/leads`, { type }).catch(() => {})
+    if (!business) return
+    await apiClient.post(`/businesses/${business.id}/leads`, { type }).catch(() => {})
   }
 
   const handleCall = () => { recordLead('call'); if (business?.phone) window.open(`tel:${business.phone}`) }
@@ -107,16 +154,16 @@ export default function ListingDetailPage() {
   const handleWhatsApp = () => { recordLead('whatsapp'); if (business?.whatsapp) window.open(`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`) }
 
   const handleSave = async () => {
-    if (saved) return // Already saved
+    if (saved || !business) return
     try {
-      await apiClient.post('/user/saved', { business_id: id })
+      await apiClient.post('/user/saved', { business_id: business.id })
       setSaved(true)
       recordLead('save')
     } catch (err: any) {
       if (err?.response?.data?.error?.code === 'SAVE_LIMIT_REACHED') {
         alert('Save limit reached. Please remove some saved places to add more.')
       } else if (err?.response?.data?.error?.code === 'ALREADY_SAVED') {
-        setSaved(true) // Already saved — just update the UI
+        setSaved(true)
       }
     }
   }
@@ -284,7 +331,7 @@ export default function ListingDetailPage() {
         {/* Address card with map thumbnail */}
         {business.address && (
           <div className="rounded-xl border border-gray-200 overflow-hidden">
-            {business.lat && business.lng ? (
+            {business.lat && business.lng && !mapError ? (
               <LazyMapView
                 markers={[{
                   id: business.id,
@@ -295,6 +342,7 @@ export default function ListingDetailPage() {
                 }]}
                 center={{ lat: business.lat, lng: business.lng }}
                 zoom={15}
+                onError={() => setMapError(true)}
                 className="h-24 rounded-none"
               />
             ) : (
@@ -400,26 +448,8 @@ export default function ListingDetailPage() {
           </div>
         )}
 
-        {/* What people say */}
-        <div>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-gray-900">What people say</h2>
-            <Link href={`/listing/${id}/reviews`} className="text-xs text-primary font-medium">View all</Link>
-          </div>
-          <div className="mt-3 rounded-xl border border-gray-100 p-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">U</div>
-              <div className="flex-1">
-                <p className="text-xs font-semibold text-gray-900">User</p>
-                <div className="flex items-center gap-1">
-                  <span className="text-yellow-400 text-[10px]">★★★★★</span>
-                  <span className="text-[10px] text-gray-400">• 2 days ago</span>
-                </div>
-              </div>
-            </div>
-            <p className="text-xs text-gray-600 mt-2 leading-relaxed">Reviews will appear here once customers share their experience.</p>
-          </div>
-        </div>
+        {/* Reviews section */}
+        <ReviewsSection businessId={business.id} reviewCount={business.review_count} slug={businessSlug} />
 
         {/* WhatsApp */}
         {business.whatsapp && (

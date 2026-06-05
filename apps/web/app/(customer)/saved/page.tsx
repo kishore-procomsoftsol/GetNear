@@ -15,6 +15,7 @@ interface SavedItem {
   businesses: {
     id: string
     name: string
+    slug?: string | null
     rating_avg: number | null
     review_count: number | null
     address: string | null
@@ -143,7 +144,7 @@ export default function SavedPlacesPage() {
           <BusinessCard
             key={item.id}
             business={item.businesses as any}
-            onClick={() => router.push(`/listing/${item.businesses.id}`)}
+            onClick={() => router.push(`/listing/${item.businesses.slug || item.businesses.id}`)}
           />
         ))}
         {!loading && savedItems.length === 0 && (

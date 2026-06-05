@@ -64,7 +64,7 @@ export function PopularNearYou() {
           <BusinessCard
             key={b.id}
             business={b}
-            onClick={() => router.push(`/listing/${b.id}`)}
+            onClick={() => router.push(`/listing/${b.slug || b.id}`)}
           />
         ))}
 

@@ -15,7 +15,7 @@ const reviewSchema = z.object({
 })
 
 export default function WriteReviewPage() {
-  const { id } = useParams<{ id: string }>()
+  const { slug } = useParams<{ slug: string }>()
   const router = useRouter()
   const [rating, setRating] = React.useState(0)
   const [submitting, setSubmitting] = React.useState(false)
@@ -28,8 +28,8 @@ export default function WriteReviewPage() {
     setSubmitting(true)
     setError(null)
     try {
-      await apiClient.post(`/businesses/${id}/reviews`, { rating, text: values.text || undefined })
-      router.push(`/listing/${id}/reviews`)
+      await apiClient.post(`/businesses/${slug}/reviews`, { rating, text: values.text || undefined })
+      router.push(`/listing/${slug}/reviews`)
     } catch (err: any) {
       const code = err?.response?.data?.error?.code
       if (code === 'REVIEW_EXISTS') setError('You have already reviewed this business.')

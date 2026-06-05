@@ -177,7 +177,7 @@ export default function CityCategoryPage() {
             <BusinessCard
               key={business.id}
               business={business}
-              onClick={() => router.push(`/listing/${business.id}`)}
+              onClick={() => router.push(`/listing/${business.slug || business.id}`)}
             />
           ))}
 

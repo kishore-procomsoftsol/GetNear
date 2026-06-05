@@ -17,6 +17,7 @@ import { MapPreviewCard } from '@/components/maps/MapPreviewCard'
 interface SearchBusiness {
   id: string
   name: string
+  slug?: string | null
   rating_avg?: number | null
   distance_m?: number | null
   lat?: number | null
@@ -72,9 +73,10 @@ export default function MapPage() {
   // Handle preview card tap — navigate to listing
   const handlePreviewTap = React.useCallback(() => {
     if (selectedBusinessId) {
-      router.push(`/listing/${selectedBusinessId}`)
+      const biz = businesses.find((b) => b.id === selectedBusinessId)
+      router.push(`/listing/${biz?.slug || selectedBusinessId}`)
     }
-  }, [selectedBusinessId, router])
+  }, [selectedBusinessId, businesses, router])
 
   // Handle preview card close
   const handlePreviewClose = React.useCallback(() => {
