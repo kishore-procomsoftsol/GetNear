@@ -385,7 +385,7 @@ router.get('/businesses/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const { data, error } = await supabaseAdmin
     .from('businesses')
-    .select('*, categories(id, name, slug, icon)')
+    .select('*, categories(id, name, slug, icon), business_photos(id, url, storage_path, is_primary, display_order)')
     .eq('id', id)
     .single();
 

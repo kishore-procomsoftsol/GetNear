@@ -78,17 +78,12 @@ export default function EditBusinessPage() {
           lat: biz.lat ? String(biz.lat) : '',
           lng: biz.lng ? String(biz.lng) : '',
         })
+        if (biz.business_photos) {
+          setExistingPhotos(biz.business_photos)
+        }
       }
       setCategories(catRes.data.data ?? [])
     }).catch(() => {}).finally(() => setLoading(false))
-
-    // Load existing photos
-    api.get(`/admin/businesses/${id}`).then((res) => {
-      const biz = res.data.data
-      if (biz?.business_photos) {
-        setExistingPhotos(biz.business_photos)
-      }
-    }).catch(() => {})
   }, [id])
 
   // Google Maps Initialization
@@ -278,6 +273,12 @@ export default function EditBusinessPage() {
             is_primary: existingPhotos.length === 0 && i === 0,
           })
         }
+      }
+
+      // Refresh photos from server after upload
+      const refreshRes = await api.get(`/admin/businesses/${id}`)
+      if (refreshRes.data.data?.business_photos) {
+        setExistingPhotos(refreshRes.data.data.business_photos)
       }
 
       setSuccess(true)
