@@ -24,13 +24,13 @@ const ALLOWED_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
 
 /** Returns true if transitioning from currentStatus to targetStatus is allowed. */
 export function isValidTransition(currentStatus: string, targetStatus: string): boolean {
-  if (!Object.hasOwn(ALLOWED_TRANSITIONS, currentStatus)) return false
+  if (!Object.prototype.hasOwnProperty.call(ALLOWED_TRANSITIONS, currentStatus)) return false
   const allowed = ALLOWED_TRANSITIONS[currentStatus as BookingStatus]
   return allowed.includes(targetStatus as BookingStatus)
 }
 
 /** Returns the list of valid next statuses from the given current status. */
 export function getValidNextStatuses(currentStatus: string): BookingStatus[] {
-  if (!Object.hasOwn(ALLOWED_TRANSITIONS, currentStatus)) return []
+  if (!Object.prototype.hasOwnProperty.call(ALLOWED_TRANSITIONS, currentStatus)) return []
   return ALLOWED_TRANSITIONS[currentStatus as BookingStatus]
 }
