@@ -58,6 +58,8 @@ jobs:
               {"name": "AWS_REGION", "value": "ap-south-1"}
             ],
             "secrets": [
+              {"name": "AWS_ACCESS_KEY_ID", "valueFrom": "/getnear/prod/AWS_ACCESS_KEY_ID"},
+              {"name": "AWS_SECRET_ACCESS_KEY", "valueFrom": "/getnear/prod/AWS_SECRET_ACCESS_KEY"},
               {"name": "GOOGLE_CLIENT_ID", "valueFrom": "/getnear/prod/GOOGLE_CLIENT_ID"},
               {"name": "GOOGLE_CLIENT_SECRET", "valueFrom": "/getnear/prod/GOOGLE_CLIENT_SECRET"},
               {"name": "GOOGLE_MAPS_API_KEY", "valueFrom": "/getnear/prod/GOOGLE_MAPS_API_KEY"},
