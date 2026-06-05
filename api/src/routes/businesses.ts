@@ -4,6 +4,7 @@ import { optionalAuth } from '../middleware/auth'
 import { searchLimiter } from '../middleware/rateLimit'
 import { sendSuccess, sendError } from '../utils/response'
 import { enforceRadius } from '../utils/search'
+import { isUUID } from '../utils/identifiers'
 
 const router = Router()
 
@@ -157,12 +158,14 @@ router.get('/search', searchLimiter, optionalAuth, async (req, res) => {
  * GET /businesses/:id
  *
  * Returns a single business with all related data (photos, hours, services, category).
+ * Supports lookup by UUID (id column) or slug (slug column).
  * Non-active businesses are hidden from non-owners (returns 404).
  *
- * Requirements: 4.1, 4.2, 4.5
+ * Requirements: 2.2, 2.4, 2.8, 4.1, 4.2, 4.5
  */
 router.get('/:id', optionalAuth, async (req, res) => {
   const { id } = req.params
+  const column = isUUID(id) ? 'id' : 'slug'
 
   const { data: business, error } = await supabaseAdmin
     .from('businesses')
@@ -173,7 +176,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
       business_services(*),
       categories(id, name, slug, icon, color)
     `)
-    .eq('id', id)
+    .eq(column, id)
     .single()
 
   if (error || !business) return sendError(res, 'NOT_FOUND', 'Business not found', 404)

@@ -79,6 +79,7 @@ router.get('/:id/reviews', optionalAuth, async (req, res) => {
     .from('reviews')
     .select('*, users(id, name, avatar_url)', { count: 'exact' })
     .eq('business_id', businessId)
+    .eq('status', 'approved')
     .order('created_at', { ascending: false })
     .range(offset, offset + limitNum - 1)
 

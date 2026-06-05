@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊', iconBg: 'bg-blue-50', iconColor: 'text-blue-600' },
   { href: '/approvals', label: 'Approvals', icon: '✅', iconBg: 'bg-orange-50', iconColor: 'text-orange-600', adminOnly: true, badgeKey: 'approvals' },
   { href: '/businesses', label: 'Businesses', icon: '🏪', iconBg: 'bg-green-50', iconColor: 'text-green-600' },
+  { href: '/reviews', label: 'Reviews', icon: '💬', iconBg: 'bg-teal-50', iconColor: 'text-teal-600', adminOnly: true },
   { href: '/users', label: 'Users', icon: '👥', iconBg: 'bg-purple-50', iconColor: 'text-purple-600', adminOnly: true },
   { href: '/reports', label: 'Reports', icon: '🚩', iconBg: 'bg-red-50', iconColor: 'text-red-600', adminOnly: true, badgeKey: 'reports' },
   { href: '/categories', label: 'Categories', icon: '📂', iconBg: 'bg-amber-50', iconColor: 'text-amber-600' },

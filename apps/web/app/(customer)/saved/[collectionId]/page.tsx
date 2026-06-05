@@ -67,7 +67,7 @@ export default function CollectionDetailPage() {
           <BusinessCard
             key={item.id}
             business={item.businesses}
-            onClick={() => router.push(`/listing/${item.businesses?.id}`)}
+            onClick={() => router.push(`/listing/${item.businesses?.slug || item.businesses?.id}`)}
           />
         ))}
         {!loading && items.length === 0 && (

@@ -265,7 +265,10 @@ export default function SearchPage() {
             markers={deriveMapPins(results as any[])}
             center={{ lat, lng }}
             zoom={13}
-            onMarkerClick={(id) => router.push(`/listing/${id}`)}
+            onMarkerClick={(id) => {
+              const biz = results.find((b) => b.id === id)
+              router.push(`/listing/${biz?.slug || id}`)
+            }}
             className="h-28 rounded-none"
           />
         </div>
@@ -296,7 +299,7 @@ export default function SearchPage() {
             <BusinessCard
               key={business.id}
               business={business}
-              onClick={() => router.push(`/listing/${business.id}`)}
+              onClick={() => router.push(`/listing/${business.slug || business.id}`)}
             />
           ))}
 

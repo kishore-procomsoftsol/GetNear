@@ -18,7 +18,7 @@ interface Review {
 }
 
 export default function AllReviewsPage() {
-  const { id } = useParams<{ id: string }>()
+  const { slug } = useParams<{ slug: string }>()
   const router = useRouter()
   const [reviews, setReviews] = React.useState<Review[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -28,14 +28,14 @@ export default function AllReviewsPage() {
   const fetchReviews = async (pageNum: number) => {
     setLoading(true)
     try {
-      const res = await apiClient.get<{ data: Review[]; meta: { hasNextPage: boolean } }>(`/businesses/${id}/reviews?page=${pageNum}&limit=20`)
+      const res = await apiClient.get<{ data: Review[]; meta: { hasNextPage: boolean } }>(`/businesses/${slug}/reviews?page=${pageNum}&limit=20`)
       setReviews((prev) => pageNum === 1 ? res.data.data : [...prev, ...res.data.data])
       setHasMore(res.data.meta?.hasNextPage ?? false)
     } catch {}
     setLoading(false)
   }
 
-  React.useEffect(() => { fetchReviews(1) }, [id])
+  React.useEffect(() => { fetchReviews(1) }, [slug])
 
   return (
     <div className="flex flex-col gap-4 px-4 pt-4 pb-8">
@@ -46,7 +46,7 @@ export default function AllReviewsPage() {
         <h1 className="text-lg font-semibold text-dark">All Reviews</h1>
       </div>
 
-      <Button variant="outline" onClick={() => router.push(`/listing/${id}/review`)}>Write a Review</Button>
+      <Button variant="outline" onClick={() => router.push(`/listing/${slug}/review`)}>Write a Review</Button>
 
       {loading && page === 1 && Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
 

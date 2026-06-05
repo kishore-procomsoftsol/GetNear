@@ -1031,4 +1031,138 @@ router.get('/logs', async (req: Request, res: Response) => {
   });
 });
 
+// ─── 19. Admin Review Management ────────────────────────────────────────────
+// GET /admin/reviews — Paginated list with filters
+// Requirements: 4.1, 4.2
+
+router.get('/reviews', async (req: Request, res: Response) => {
+  const { business_id, rating_min, rating_max, start_date, end_date, status, page = '1', limit = '20' } = req.query;
+  const pageNum = Math.max(1, parseInt(page as string) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit as string) || 20));
+  const offset = (pageNum - 1) * limitNum;
+
+  let query = supabaseAdmin
+    .from('reviews')
+    .select('*, businesses(name), users(name, email, avatar_url)', { count: 'exact' });
+
+  if (business_id) query = query.eq('business_id', business_id as string);
+  if (status) query = query.eq('status', status as string);
+  if (rating_min) query = query.gte('rating', parseInt(rating_min as string));
+  if (rating_max) query = query.lte('rating', parseInt(rating_max as string));
+  if (start_date) query = query.gte('created_at', start_date as string);
+  if (end_date) query = query.lte('created_at', end_date as string);
+
+  query = query.order('created_at', { ascending: false }).range(offset, offset + limitNum - 1);
+
+  const { data, error, count } = await query;
+
+  if (error) return sendError(res, 'FETCH_FAILED', error.message, 500);
+
+  sendSuccess(res, data ?? [], {
+    page: pageNum,
+    pageSize: limitNum,
+    total: count ?? 0,
+    hasNextPage: offset + limitNum < (count ?? 0),
+  });
+});
+
+// PUT /admin/reviews/:id/approve — Approve a review
+// Requirements: 4.3, 4.6
+
+router.put('/reviews/:id/approve', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const adminId = req.user!.id;
+
+  const { data, error } = await supabaseAdmin
+    .from('reviews')
+    .update({ status: 'approved', updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id, status, business_id')
+    .single();
+
+  if (error || !data) return sendError(res, 'NOT_FOUND', 'Review not found', 404);
+
+  // Recalculate the business rating
+  await supabaseAdmin.rpc('recalculate_business_rating', { p_business_id: data.business_id });
+
+  await logAdminAction(adminId, 'review_approve', 'review', id);
+
+  sendSuccess(res, { id: data.id, status: data.status });
+});
+
+// PUT /admin/reviews/:id — Edit review text
+// Requirements: 4.4, 4.6, 4.8
+
+router.put('/reviews/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const adminId = req.user!.id;
+  const { text } = req.body;
+
+  // Validate text length (1–1000 chars)
+  if (!text || typeof text !== 'string' || text.length < 1 || text.length > 1000) {
+    return sendError(
+      res,
+      'VALIDATION_ERROR',
+      'Review text must be between 1 and 1000 characters',
+      400
+    );
+  }
+
+  // Fetch original review to log original text
+  const { data: original, error: fetchError } = await supabaseAdmin
+    .from('reviews')
+    .select('id, text')
+    .eq('id', id)
+    .single();
+
+  if (fetchError || !original) return sendError(res, 'NOT_FOUND', 'Review not found', 404);
+
+  // Update the review text
+  const { data, error } = await supabaseAdmin
+    .from('reviews')
+    .update({ text, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('id, text')
+    .single();
+
+  if (error || !data) return sendError(res, 'UPDATE_FAILED', 'Failed to update review', 500);
+
+  // Log the original text in admin_logs
+  await logAdminAction(adminId, 'review_edit', 'review', id, `Original text: ${original.text ?? ''}`);
+
+  sendSuccess(res, { id: data.id, text: data.text });
+});
+
+// DELETE /admin/reviews/:id — Delete a review
+// Requirements: 4.5, 4.6
+
+router.delete('/reviews/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const adminId = req.user!.id;
+
+  // Fetch the review to get business_id before deletion
+  const { data: review, error: fetchError } = await supabaseAdmin
+    .from('reviews')
+    .select('id, business_id')
+    .eq('id', id)
+    .single();
+
+  if (fetchError || !review) return sendError(res, 'NOT_FOUND', 'Review not found', 404);
+
+  // Delete the review
+  const { error } = await supabaseAdmin
+    .from('reviews')
+    .delete()
+    .eq('id', id);
+
+  if (error) return sendError(res, 'DELETE_FAILED', 'Failed to delete review', 500);
+
+  // Recalculate the business rating
+  await supabaseAdmin.rpc('recalculate_business_rating', { p_business_id: review.business_id });
+
+  await logAdminAction(adminId, 'review_delete', 'review', id);
+
+  sendSuccess(res, { deleted: true });
+});
+
 export default router;
