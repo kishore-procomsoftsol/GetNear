@@ -10,6 +10,11 @@ const nextConfig = {
         hostname: '*.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'getnear-assets.s3.ap-south-1.amazonaws.com',
+        pathname: '/**',
+      },
     ],
   },
 }

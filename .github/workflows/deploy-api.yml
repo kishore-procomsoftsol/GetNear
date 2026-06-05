@@ -53,7 +53,9 @@ jobs:
             "containerPort": 4000,
             "environment": [
               {"name": "PORT", "value": "4000"},
-              {"name": "NODE_ENV", "value": "production"}
+              {"name": "NODE_ENV", "value": "production"},
+              {"name": "S3_BUCKET", "value": "getnear-assets"},
+              {"name": "AWS_REGION", "value": "ap-south-1"}
             ],
             "secrets": [
               {"name": "GOOGLE_CLIENT_ID", "valueFrom": "/getnear/prod/GOOGLE_CLIENT_ID"},

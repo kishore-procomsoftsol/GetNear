@@ -11,6 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1062.0",
     "@sentry/node": "^8.9.2",
     "@supabase/supabase-js": "^2.43.4",
     "axios": "^1.7.2",

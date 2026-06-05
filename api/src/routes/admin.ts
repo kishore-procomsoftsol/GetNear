@@ -605,7 +605,7 @@ router.post('/businesses', async (req: Request, res: Response) => {
 
 // ─── 9d. Upload Business Photo ───────────────────────────────────────────────
 // POST /admin/businesses/:id/photos
-// Accepts base64 image data, uploads to Supabase Storage
+// Accepts base64 image data, uploads to AWS S3
 
 router.post('/businesses/:id/photos', async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -623,58 +623,48 @@ router.post('/businesses/:id/photos', async (req: Request, res: Response) => {
   const { data: biz } = await supabaseAdmin.from('businesses').select('id').eq('id', id).single();
   if (!biz) return sendError(res, 'NOT_FOUND', 'Business not found', 404);
 
-  // Decode base64 and upload to Supabase Storage
+  // Decode base64 and upload to S3
   const buffer = Buffer.from(image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
   const ext = filename?.split('.').pop() || 'jpg';
-  const storagePath = `${id}/${Date.now()}.${ext}`;
+  const contentType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+  const storagePath = `business-photos/${id}/${Date.now()}.${ext}`;
 
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from('business-photos')
-    .upload(storagePath, buffer, {
-      contentType: `image/${ext === 'png' ? 'png' : ext === 'webp' ? 'webp' : 'jpeg'}`,
-      upsert: false,
-    });
+  try {
+    const { uploadToS3 } = await import('../lib/s3');
+    const publicUrl = await uploadToS3(buffer, storagePath, contentType);
 
-  if (uploadError) {
-    return sendError(res, 'UPLOAD_FAILED', uploadError.message, 500);
+    // If marking as primary, unset other primaries first
+    if (is_primary) {
+      await supabaseAdmin.from('business_photos').update({ is_primary: false }).eq('business_id', id);
+    }
+
+    // Get current photo count for display_order
+    const { count } = await supabaseAdmin
+      .from('business_photos')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', id);
+
+    // Insert photo record
+    const { data: photo, error: insertError } = await supabaseAdmin
+      .from('business_photos')
+      .insert({
+        business_id: id,
+        url: publicUrl,
+        storage_path: storagePath,
+        is_primary: is_primary ?? (count === 0), // First photo is primary by default
+        display_order: count ?? 0,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      return sendError(res, 'INSERT_FAILED', insertError.message, 500);
+    }
+
+    sendSuccess(res, photo, undefined, 201);
+  } catch (err: any) {
+    return sendError(res, 'UPLOAD_FAILED', err.message || 'Failed to upload to S3', 500);
   }
-
-  // Get public URL
-  const { data: urlData } = supabaseAdmin.storage
-    .from('business-photos')
-    .getPublicUrl(storagePath);
-
-  const publicUrl = urlData.publicUrl;
-
-  // If marking as primary, unset other primaries first
-  if (is_primary) {
-    await supabaseAdmin.from('business_photos').update({ is_primary: false }).eq('business_id', id);
-  }
-
-  // Get current photo count for display_order
-  const { count } = await supabaseAdmin
-    .from('business_photos')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', id);
-
-  // Insert photo record
-  const { data: photo, error: insertError } = await supabaseAdmin
-    .from('business_photos')
-    .insert({
-      business_id: id,
-      url: publicUrl,
-      storage_path: storagePath,
-      is_primary: is_primary ?? (count === 0), // First photo is primary by default
-      display_order: count ?? 0,
-    })
-    .select()
-    .single();
-
-  if (insertError) {
-    return sendError(res, 'INSERT_FAILED', insertError.message, 500);
-  }
-
-  sendSuccess(res, photo, undefined, 201);
 });
 
 // DELETE /admin/businesses/:id/photos/:photoId
@@ -691,8 +681,13 @@ router.delete('/businesses/:id/photos/:photoId', async (req: Request, res: Respo
 
   if (!photo) return sendError(res, 'NOT_FOUND', 'Photo not found', 404);
 
-  // Delete from storage
-  await supabaseAdmin.storage.from('business-photos').remove([photo.storage_path]);
+  // Delete from S3
+  try {
+    const { deleteFromS3 } = await import('../lib/s3');
+    await deleteFromS3(photo.storage_path);
+  } catch {
+    // Continue even if S3 delete fails — still remove DB record
+  }
 
   // Delete record
   await supabaseAdmin.from('business_photos').delete().eq('id', photoId);

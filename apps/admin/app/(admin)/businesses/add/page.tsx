@@ -196,6 +196,7 @@ export default function AddBusinessPage() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setGpsLoading(false)
+        setGpsError(null)
         const pos = { lat: position.coords.latitude, lng: position.coords.longitude }
         placeMarker(pos)
         if (mapInstanceRef.current) {
@@ -206,7 +207,11 @@ export default function AddBusinessPage() {
       },
       (err) => {
         setGpsLoading(false)
-        setGpsError(err.code === 1 ? 'Location access denied' : 'Could not get location')
+        if (err.code === 1) {
+          setGpsError('Location access denied. Make sure the site is loaded over HTTPS and location is allowed.')
+        } else {
+          setGpsError('Could not get location. Try clicking on the map instead.')
+        }
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )
