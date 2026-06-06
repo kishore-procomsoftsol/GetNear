@@ -192,13 +192,33 @@ router.get('/:id', optionalAuth, async (req, res) => {
   let lat: number | null = null
   let lng: number | null = null
   if (business.location) {
-    // PostGIS returns location as a string like "POINT(lng lat)" or as an object with coordinates
     const loc = business.location as any
     if (typeof loc === 'string') {
-      const match = loc.match(/POINT\(([^ ]+) ([^ ]+)\)/)
-      if (match) {
-        lng = parseFloat(match[1])
-        lat = parseFloat(match[2])
+      // Check for WKT format: POINT(lng lat)
+      const wktMatch = loc.match(/POINT\(([^ ]+) ([^ ]+)\)/)
+      if (wktMatch) {
+        lng = parseFloat(wktMatch[1])
+        lat = parseFloat(wktMatch[2])
+      } else if (/^[0-9a-fA-F]+$/.test(loc) && loc.length >= 42) {
+        // WKB hex format (EWKB with SRID): parse lng/lat as IEEE 754 doubles
+        // EWKB structure: byte order (2) + type (8) + SRID (8) + X/lng (16) + Y/lat (16) = 50 hex chars minimum
+        try {
+          const buf = Buffer.from(loc, 'hex')
+          // Byte 0: endianness (01 = little-endian)
+          const le = buf[0] === 1
+          // For EWKB with SRID (type has 0x20000000 flag), coords start at offset 21 bytes
+          // Standard EWKB: 1 (endian) + 4 (type) + 4 (srid) + 8 (x) + 8 (y) = 25 bytes
+          const offset = buf.length >= 25 ? 9 : 5 // skip endian(1) + type(4) + srid(4) OR endian(1) + type(4)
+          if (le) {
+            lng = buf.readDoubleLE(offset)
+            lat = buf.readDoubleLE(offset + 8)
+          } else {
+            lng = buf.readDoubleBE(offset)
+            lat = buf.readDoubleBE(offset + 8)
+          }
+        } catch {
+          // Failed to parse WKB — leave lat/lng as null
+        }
       }
     } else if (loc?.coordinates) {
       // GeoJSON format: [lng, lat]

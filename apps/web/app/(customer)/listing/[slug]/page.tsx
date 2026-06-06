@@ -149,7 +149,7 @@ export default function ListingDetailPage() {
   }
 
   const handleCall = () => { recordLead('call'); if (business?.phone) window.open(`tel:${business.phone}`) }
-  const handleDirections = () => { recordLead('direction'); window.open(`https://maps.google.com/?q=${encodeURIComponent(business?.address ?? business?.name ?? '')}`) }
+  const handleDirections = () => { recordLead('direction'); if (business?.lat && business?.lng) { window.open(`https://www.google.com/maps/dir/?api=1&destination=${business.lat},${business.lng}`) } else { window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(business?.address ?? business?.name ?? '')}`) } }
   const handleWebsite = () => { recordLead('website'); if (business?.website) window.open(business.website, '_blank') }
   const handleWhatsApp = () => { recordLead('whatsapp'); if (business?.whatsapp) window.open(`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`) }
 
