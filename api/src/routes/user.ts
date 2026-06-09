@@ -391,6 +391,44 @@ router.delete('/collections/:id', async (req, res) => {
 })
 
 // ---------------------------------------------------------------------------
+// User Reviews
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /user/reviews
+ *
+ * Returns the authenticated user's approved reviews with joined business data.
+ */
+router.get('/reviews', async (req, res) => {
+  const userId = req.user!.id
+
+  const { data, error, count } = await supabaseAdmin
+    .from('reviews')
+    .select(`
+      id,
+      rating,
+      text,
+      status,
+      created_at,
+      businesses (
+        id,
+        name,
+        slug
+      )
+    `, { count: 'exact' })
+    .eq('user_id', userId)
+    .eq('status', 'approved')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) {
+    return sendError(res, 'FETCH_FAILED', error.message, 500)
+  }
+
+  sendSuccess(res, data ?? [], { page: 1, pageSize: 50, total: count ?? 0, hasNextPage: false })
+})
+
+// ---------------------------------------------------------------------------
 // User Profile (Task 11.1)
 // ---------------------------------------------------------------------------
 

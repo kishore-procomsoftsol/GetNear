@@ -186,10 +186,12 @@ export default function AccountPage() {
   React.useEffect(() => {
     async function fetchData() {
       try {
-        const [profileRes, savedRes, collectionsRes] = await Promise.allSettled([
+        const [profileRes, savedRes, collectionsRes, searchRes, reviewsRes] = await Promise.allSettled([
           apiClient.get<{ data: UserProfile }>('/user/profile'),
           apiClient.get<{ data: unknown[]; meta?: { total: number } }>('/user/saved'),
           apiClient.get<{ data: Collection[] }>('/user/collections'),
+          apiClient.get<{ data: unknown[] }>('/user/search-history'),
+          apiClient.get<{ data: unknown[]; meta?: { total: number } }>('/user/reviews'),
         ])
 
         if (profileRes.status === 'fulfilled') {
@@ -201,6 +203,14 @@ export default function AccountPage() {
         }
         if (collectionsRes.status === 'fulfilled') {
           setCollections(collectionsRes.value.data.data ?? [])
+        }
+        if (searchRes.status === 'fulfilled') {
+          const d = searchRes.value.data
+          setSearchCount(d.data?.length ?? 0)
+        }
+        if (reviewsRes.status === 'fulfilled') {
+          const d = reviewsRes.value.data
+          setReviewCount(d.meta?.total ?? d.data?.length ?? 0)
         }
       } finally {
         setLoading(false)
