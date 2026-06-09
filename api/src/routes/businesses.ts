@@ -120,24 +120,64 @@ router.get('/search', searchLimiter, optionalAuth, async (req, res) => {
   // Fetch active offers for the result businesses
   const businessIds = results.map((b: any) => b.id).filter(Boolean)
   let offersMap: Record<string, Array<{ title: string; valid_until: string | null }>> = {}
+  let photosMap: Record<string, Array<{ url: string; is_primary: boolean; display_order: number }>> = {}
+  let hoursMap: Record<string, Array<{ day: number; open_time: string | null; close_time: string | null; is_closed: boolean }>> = {}
+  let categoriesMap: Record<string, { name: string; icon: string | null; color: string | null }> = {}
+
   if (businessIds.length > 0) {
-    const { data: offersData } = await supabaseAdmin
-      .from('offers')
-      .select('business_id, title, valid_until')
-      .in('business_id', businessIds)
-      .eq('is_active', true)
-    if (offersData) {
-      for (const offer of offersData) {
+    const [offersRes, photosRes, hoursRes, categoriesRes] = await Promise.all([
+      supabaseAdmin
+        .from('offers')
+        .select('business_id, title, valid_until')
+        .in('business_id', businessIds)
+        .eq('is_active', true),
+      supabaseAdmin
+        .from('business_photos')
+        .select('business_id, url, is_primary, display_order')
+        .in('business_id', businessIds)
+        .order('display_order', { ascending: true }),
+      supabaseAdmin
+        .from('business_hours')
+        .select('business_id, day, open_time, close_time, is_closed')
+        .in('business_id', businessIds),
+      supabaseAdmin
+        .from('categories')
+        .select('id, name, icon, color')
+        .in('id', results.map((b: any) => b.category_id).filter(Boolean)),
+    ])
+
+    if (offersRes.data) {
+      for (const offer of offersRes.data) {
         if (!offersMap[offer.business_id]) offersMap[offer.business_id] = []
         offersMap[offer.business_id].push({ title: offer.title, valid_until: offer.valid_until })
       }
     }
+    if (photosRes.data) {
+      for (const photo of photosRes.data) {
+        if (!photosMap[photo.business_id]) photosMap[photo.business_id] = []
+        photosMap[photo.business_id].push({ url: photo.url, is_primary: photo.is_primary, display_order: photo.display_order })
+      }
+    }
+    if (hoursRes.data) {
+      for (const h of hoursRes.data) {
+        if (!hoursMap[h.business_id]) hoursMap[h.business_id] = []
+        hoursMap[h.business_id].push({ day: h.day, open_time: h.open_time, close_time: h.close_time, is_closed: h.is_closed })
+      }
+    }
+    if (categoriesRes.data) {
+      for (const cat of categoriesRes.data) {
+        categoriesMap[cat.id] = { name: cat.name, icon: cat.icon, color: cat.color }
+      }
+    }
   }
 
-  // Attach offers and is_sponsored to results, then sort sponsored to top
+  // Attach offers, photos, hours, categories and is_sponsored to results, then sort sponsored to top
   results = results.map((b: any) => ({
     ...b,
     offers: offersMap[b.id] ?? null,
+    business_photos: photosMap[b.id] ?? [],
+    business_hours: hoursMap[b.id] ?? [],
+    categories: b.category_id ? categoriesMap[b.category_id] ?? null : null,
     is_sponsored: b.is_sponsored ?? false,
   }))
 
