@@ -285,4 +285,175 @@ router.patch('/bookings/:id/status', async (req, res) => {
   sendSuccess(res, data)
 })
 
+// ---------------------------------------------------------------------------
+// Photos Management
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /dashboard/photos
+ * Returns all photos for the business.
+ */
+router.get('/photos', async (req, res) => {
+  const biz = await getOwnedBusiness(req.user!.id)
+  if (!biz) return sendError(res, 'NOT_FOUND', 'No business found', 404)
+
+  const { data, error } = await supabaseAdmin
+    .from('business_photos')
+    .select('id, url, is_primary, created_at')
+    .eq('business_id', biz.id)
+    .order('is_primary', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (error) return sendError(res, 'FETCH_FAILED', error.message, 500)
+  sendSuccess(res, data ?? [])
+})
+
+/**
+ * POST /dashboard/photos
+ * Uploads photos (handled via S3 presigned or direct upload).
+ * For now, accepts a JSON body with urls.
+ */
+router.post('/photos', async (req, res) => {
+  const biz = await getOwnedBusiness(req.user!.id)
+  if (!biz) return sendError(res, 'NOT_FOUND', 'No business found', 404)
+
+  const { urls } = req.body
+  if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    return sendError(res, 'VALIDATION_ERROR', 'urls array is required', 400)
+  }
+
+  // Check if business has any photos (first upload becomes primary)
+  const { count } = await supabaseAdmin
+    .from('business_photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', biz.id)
+
+  const rows = urls.map((url: string, i: number) => ({
+    business_id: biz.id,
+    url,
+    is_primary: (count ?? 0) === 0 && i === 0,
+  }))
+
+  const { data, error } = await supabaseAdmin
+    .from('business_photos')
+    .insert(rows)
+    .select()
+
+  if (error) return sendError(res, 'CREATE_FAILED', error.message, 500)
+  sendSuccess(res, data ?? [], undefined, 201)
+})
+
+/**
+ * DELETE /dashboard/photos/:id
+ * Deletes a photo.
+ */
+router.delete('/photos/:id', async (req, res) => {
+  const biz = await getOwnedBusiness(req.user!.id)
+  if (!biz) return sendError(res, 'NOT_FOUND', 'No business found', 404)
+
+  const { error } = await supabaseAdmin
+    .from('business_photos')
+    .delete()
+    .eq('id', req.params.id)
+    .eq('business_id', biz.id)
+
+  if (error) return sendError(res, 'DELETE_FAILED', error.message, 500)
+  sendSuccess(res, { deleted: true })
+})
+
+/**
+ * PATCH /dashboard/photos/:id/primary
+ * Sets a photo as the primary photo.
+ */
+router.patch('/photos/:id/primary', async (req, res) => {
+  const biz = await getOwnedBusiness(req.user!.id)
+  if (!biz) return sendError(res, 'NOT_FOUND', 'No business found', 404)
+
+  // Unset current primary
+  await supabaseAdmin
+    .from('business_photos')
+    .update({ is_primary: false })
+    .eq('business_id', biz.id)
+    .eq('is_primary', true)
+
+  // Set new primary
+  const { error } = await supabaseAdmin
+    .from('business_photos')
+    .update({ is_primary: true })
+    .eq('id', req.params.id)
+    .eq('business_id', biz.id)
+
+  if (error) return sendError(res, 'UPDATE_FAILED', error.message, 500)
+  sendSuccess(res, { updated: true })
+})
+
+// ---------------------------------------------------------------------------
+// Listing Management
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /dashboard/listing
+ * Returns the full business listing for the owner.
+ */
+router.get('/listing', async (req, res) => {
+  const userId = req.user!.id
+
+  const { data, error } = await supabaseAdmin
+    .from('businesses')
+    .select(`
+      id, name, slug, description, phone, email, website, whatsapp,
+      address, city, state, pin, status, verified, rating_avg, review_count,
+      category_id, type,
+      categories (id, name, slug, icon),
+      business_photos (id, url, is_primary),
+      business_hours (day, open_time, close_time, is_closed),
+      business_services (id, name, price, description, display_order)
+    `)
+    .eq('owner_id', userId)
+    .limit(1)
+    .single()
+
+  if (error) return sendError(res, 'NOT_FOUND', 'No business found', 404)
+  sendSuccess(res, data)
+})
+
+/**
+ * PUT /dashboard/listing
+ * Updates the business listing fields.
+ */
+router.put('/listing', async (req, res) => {
+  const biz = await getOwnedBusiness(req.user!.id)
+  if (!biz) return sendError(res, 'NOT_FOUND', 'No business found', 404)
+
+  const { name, description, phone, email, website, whatsapp, address, city, state, pin } = req.body
+
+  const updates: Record<string, any> = {}
+  if (name !== undefined) updates.name = name
+  if (description !== undefined) updates.description = description
+  if (phone !== undefined) updates.phone = phone
+  if (email !== undefined) updates.email = email
+  if (website !== undefined) updates.website = website
+  if (whatsapp !== undefined) updates.whatsapp = whatsapp
+  if (address !== undefined) updates.address = address
+  if (city !== undefined) updates.city = city
+  if (state !== undefined) updates.state = state
+  if (pin !== undefined) updates.pin = pin
+
+  if (Object.keys(updates).length === 0) {
+    return sendError(res, 'VALIDATION_ERROR', 'At least one field must be provided', 400)
+  }
+
+  updates.updated_at = new Date().toISOString()
+
+  const { data, error } = await supabaseAdmin
+    .from('businesses')
+    .update(updates)
+    .eq('id', biz.id)
+    .select()
+    .single()
+
+  if (error) return sendError(res, 'UPDATE_FAILED', error.message, 500)
+  sendSuccess(res, data)
+})
+
 export default router

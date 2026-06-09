@@ -85,41 +85,73 @@ function formatDate(dateStr: string): string {
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
 function BusinessCard() {
+  const [biz, setBiz] = React.useState<any>(null)
+
+  React.useEffect(() => {
+    apiClient.get('/dashboard/listing')
+      .then((res) => setBiz(res.data.data))
+      .catch(() => {})
+  }, [])
+
+  const displayName = biz?.name ?? 'My Business'
+  const categoryName = biz?.categories?.name ?? ''
+  const location = biz?.city ?? ''
+  const icon = biz?.categories?.icon ?? '🏪'
+  const rating = biz?.rating_avg ?? 0
+  const reviewCount = biz?.review_count ?? 0
+  const isVerified = biz?.verified ?? false
+  const status = biz?.status ?? 'pending'
+  const slug = biz?.slug ?? biz?.id
+
   return (
     <div className="rounded-xl border border-gray-100 bg-white p-5">
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         {/* Business photo */}
         <div className="h-16 w-16 rounded-full bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center flex-shrink-0">
-          <span className="text-2xl">☕</span>
+          <span className="text-2xl">{icon}</span>
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold text-gray-900">Cafe Brew</h1>
-            <Badge variant="success" className="text-[10px] px-2 py-0.5">Open</Badge>
+            <h1 className="text-xl font-bold text-gray-900">{displayName}</h1>
+            <Badge variant={status === 'active' ? 'success' : 'warning'} className="text-[10px] px-2 py-0.5">
+              {status === 'active' ? 'Active' : 'Pending'}
+            </Badge>
           </div>
-          <p className="text-sm text-gray-500 mt-0.5">Cafe • Dwaraka Nagar, Visakhapatnam</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {categoryName}{categoryName && location ? ' • ' : ''}{location}
+          </p>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
-            <span className="flex items-center gap-1 text-sm text-gray-700">
-              <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-              4.5 <span className="text-gray-400">(128 Reviews)</span>
-            </span>
-            <span className="flex items-center gap-1 text-sm text-green-600">
-              <CheckCircle className="h-3.5 w-3.5" />
-              Verified Business
-            </span>
+            {rating > 0 && (
+              <span className="flex items-center gap-1 text-sm text-gray-700">
+                <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                {rating.toFixed(1)} <span className="text-gray-400">({reviewCount} Reviews)</span>
+              </span>
+            )}
+            {isVerified && (
+              <span className="flex items-center gap-1 text-sm text-green-600">
+                <CheckCircle className="h-3.5 w-3.5" />
+                Verified Business
+              </span>
+            )}
           </div>
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          <Button variant="outline" size="sm" className="gap-1.5">
-            View Listing <ExternalLink className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="sm" className="gap-1.5">
-            Edit Listing <Pencil className="h-3.5 w-3.5" />
-          </Button>
+          {slug && (
+            <Link href={`/listing/${slug}`}>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                View Listing <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
+          <Link href="/dashboard/listing">
+            <Button size="sm" className="gap-1.5">
+              Edit Listing <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
         </div>
       </div>
     </div>
