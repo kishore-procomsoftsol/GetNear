@@ -60,6 +60,9 @@ router.post('/:id/reviews', authenticate, validate(createReviewSchema), async (r
     return sendError(res, 'CREATE_FAILED', error.message, 500)
   }
 
+  // Explicitly recalculate rating in case the trigger didn't fire
+  await supabaseAdmin.rpc('recalculate_business_rating', { p_business_id: businessId }).catch(() => {})
+
   sendSuccess(res, data, undefined, 201)
 })
 
