@@ -8,6 +8,7 @@ import { useLocationStore } from '@/lib/stores/locationStore'
 import { deriveMapPins } from '@/lib/utils/mapUtils'
 import { MapView } from '@/components/maps/MapView'
 import { MapPreviewCard } from '@/components/maps/MapPreviewCard'
+import { SmartSearchInput } from '@/components/home/SmartSearchInput'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -159,6 +160,13 @@ export default function MapPage() {
       >
         <ArrowLeft className="h-5 w-5 text-gray-700" />
       </button>
+
+      {/* Search bar — fixed top center */}
+      {!mapError && (
+        <div className="fixed top-4 left-14 right-14 z-30">
+          <SmartSearchInput className="shadow-md" />
+        </div>
+      )}
 
       {/* My Location button — fixed top-right */}
       {!mapError && (
