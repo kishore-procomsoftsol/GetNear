@@ -61,6 +61,7 @@ function StatCard({
   icon: Icon,
   iconColor,
   iconBg,
+  href,
 }: {
   label: string
   value: number | null
@@ -68,9 +69,13 @@ function StatCard({
   icon: React.ElementType
   iconColor: string
   iconBg: string
+  href?: string
 }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-gray-100 bg-white p-3 gap-1.5 shadow-sm">
+  const content = (
+    <div className={cn(
+      'flex flex-col items-center justify-center rounded-xl border border-gray-100 bg-white p-3 gap-1.5 shadow-sm',
+      href && 'hover:shadow-md transition-shadow cursor-pointer'
+    )}>
       <div className={cn('w-8 h-8 rounded-full flex items-center justify-center', iconBg)}>
         <Icon className={cn('h-4 w-4', iconColor)} />
       </div>
@@ -82,6 +87,11 @@ function StatCard({
       <span className="text-[10px] text-gray-500 text-center leading-tight">{label}</span>
     </div>
   )
+
+  if (href) {
+    return <Link href={href}>{content}</Link>
+  }
+  return content
 }
 
 // ---------------------------------------------------------------------------
@@ -317,9 +327,9 @@ export default function AccountPage() {
       {/* Stats row */}
       <div className="px-4 mt-4">
         <div className="grid grid-cols-4 gap-2">
-          <StatCard label="Saved Places" value={savedCount} loading={loading} icon={Heart} iconColor="text-red-500" iconBg="bg-red-50" />
-          <StatCard label="Searches" value={searchCount} loading={loading} icon={Clock} iconColor="text-blue-500" iconBg="bg-blue-50" />
-          <StatCard label="Reviews" value={reviewCount} loading={loading} icon={Star} iconColor="text-yellow-500" iconBg="bg-yellow-50" />
+          <StatCard label="Saved Places" value={savedCount} loading={loading} icon={Heart} iconColor="text-red-500" iconBg="bg-red-50" href="/saved" />
+          <StatCard label="Searches" value={searchCount} loading={loading} icon={Clock} iconColor="text-blue-500" iconBg="bg-blue-50" href="/account/history" />
+          <StatCard label="Reviews" value={reviewCount} loading={loading} icon={Star} iconColor="text-yellow-500" iconBg="bg-yellow-50" href="/account/reviews" />
           <StatCard label="Offers" value={0} loading={loading} icon={Tag} iconColor="text-purple-500" iconBg="bg-purple-50" />
         </div>
       </div>
@@ -329,7 +339,7 @@ export default function AccountPage() {
         <h3 className="text-sm font-bold text-gray-900 mb-3">My Activity</h3>
         <div className="grid grid-cols-4 gap-2">
           <ActivityCard label="Search History" icon={Search} iconColor="text-blue-500" iconBg="bg-blue-50" href="/account/history" />
-          <ActivityCard label="Recently Viewed" icon={Eye} iconColor="text-emerald-500" iconBg="bg-emerald-50" href="/account/history" />
+          <ActivityCard label="Recently Viewed" icon={Eye} iconColor="text-emerald-500" iconBg="bg-emerald-50" href="/account/recently-viewed" />
           <ActivityCard label="Bookings" icon={Calendar} iconColor="text-orange-500" iconBg="bg-orange-50" href="/account/bookings" />
           <ActivityCard label="Messages" icon={MessageCircle} iconColor="text-violet-500" iconBg="bg-violet-50" href="/chats" />
         </div>

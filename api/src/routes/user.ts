@@ -391,6 +391,66 @@ router.delete('/collections/:id', async (req, res) => {
 })
 
 // ---------------------------------------------------------------------------
+// Recently Viewed
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /user/recently-viewed
+ *
+ * Returns businesses the user has recently viewed (based on leads with type 'view').
+ * Deduplicates by business_id and returns the most recent view per business.
+ */
+router.get('/recently-viewed', async (req, res) => {
+  const userId = req.user!.id
+
+  const { data, error } = await supabaseAdmin
+    .from('leads')
+    .select(`
+      id,
+      business_id,
+      created_at,
+      businesses (
+        id,
+        name,
+        slug,
+        rating_avg,
+        review_count,
+        address,
+        city,
+        categories (
+          id,
+          name,
+          icon,
+          color
+        ),
+        business_photos (
+          id,
+          url,
+          is_primary
+        )
+      )
+    `)
+    .eq('user_id', userId)
+    .eq('type', 'view')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) {
+    return sendError(res, 'FETCH_FAILED', error.message, 500)
+  }
+
+  // Deduplicate by business_id — keep only most recent view per business
+  const seen = new Set<string>()
+  const unique = (data ?? []).filter((entry: any) => {
+    if (seen.has(entry.business_id)) return false
+    seen.add(entry.business_id)
+    return true
+  })
+
+  sendSuccess(res, unique)
+})
+
+// ---------------------------------------------------------------------------
 // User Reviews
 // ---------------------------------------------------------------------------
 
