@@ -7,11 +7,10 @@ import { useRouter } from 'next/navigation'
 import { MapPin, Search, Bell, ChevronDown, Navigation2 } from 'lucide-react'
 import { useLocationStore } from '@/lib/stores/locationStore'
 import { useAuthStore } from '@/lib/stores/authStore'
-import { CATEGORIES } from '@getnear/config'
 import { CitySelector } from '@/components/location/CitySelector'
 import { PopularNearYou } from '@/components/home/PopularNearYou'
+import { SmartSearchInput } from '@/components/home/SmartSearchInput'
 import { LazyMapView } from '@/components/maps/LazyMapView'
-import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
 // Greeting (client-only to avoid hydration mismatch)
@@ -50,28 +49,6 @@ function QuickAccessItem({ icon, label, onClick }: { icon: string; label: string
 }
 
 // ---------------------------------------------------------------------------
-// Search Filter Pill
-// ---------------------------------------------------------------------------
-
-function FilterPill({ icon, label, active, onClick }: { icon: string; label: string; active?: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border whitespace-nowrap transition-all',
-        active
-          ? 'bg-primary text-white border-primary shadow-sm'
-          : 'bg-white text-gray-700 border-gray-200 hover:border-primary hover:text-primary'
-      )}
-    >
-      <span className="text-base">{icon}</span>
-      {label}
-    </button>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -79,10 +56,8 @@ export default function HomePage() {
   const router = useRouter()
   const { user } = useAuthStore()
   const { city, lat, lng, radius, setRadius, isLocating } = useLocationStore()
-  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null)
 
   const greeting = useGreeting()
-  const topCategories = CATEGORIES.filter((c) => c.parent_id === null).slice(0, 5)
 
   const quickAccessItems = [
     { icon: '🍽️', label: 'Restaurants', slug: 'restaurants' },
@@ -199,18 +174,7 @@ export default function HomePage() {
       {/* Search Filters */}
       <div className="px-4 pt-5">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Search for</p>
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-          {topCategories.map((cat) => (
-            <FilterPill
-              key={cat.id}
-              icon={cat.icon}
-              label={cat.name}
-              active={selectedCategory === cat.slug}
-              onClick={() => setSelectedCategory(selectedCategory === cat.slug ? null : cat.slug)}
-            />
-          ))}
-          <FilterPill icon="📋" label="More" onClick={() => router.push('/search')} />
-        </div>
+        <SmartSearchInput />
 
         {/* Radius + Sort + Search Button */}
         <div className="flex items-center gap-3 mt-4">
@@ -232,7 +196,7 @@ export default function HomePage() {
             <span className="text-sm font-medium text-gray-700">Relevance</span>
           </div>
           <button
-            onClick={() => router.push(selectedCategory ? `/search?category=${selectedCategory}` : '/search')}
+            onClick={() => router.push('/search')}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold shadow-md hover:bg-primary-700 transition-colors"
           >
             <Search className="h-4 w-4" /> Search
