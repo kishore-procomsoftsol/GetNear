@@ -61,7 +61,11 @@ router.post('/:id/reviews', authenticate, validate(createReviewSchema), async (r
   }
 
   // Explicitly recalculate rating in case the trigger didn't fire
-  await supabaseAdmin.rpc('recalculate_business_rating', { p_business_id: businessId }).catch(() => {})
+  try {
+    await supabaseAdmin.rpc('recalculate_business_rating', { p_business_id: businessId })
+  } catch {
+    // ignore — rating will be updated by trigger if available
+  }
 
   sendSuccess(res, data, undefined, 201)
 })
