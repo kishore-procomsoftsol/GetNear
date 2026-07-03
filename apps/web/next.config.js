@@ -17,5 +17,24 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/dashboard',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/dashboard/:path*',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/add-business',
+        destination: '/',
+        permanent: true,
+      },
+    ]
+  },
 }
 export default nextConfig;
