@@ -2,12 +2,12 @@
 
 import * as React from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Search, MapPin, SlidersHorizontal, X, Star, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Search, MapPin, SlidersHorizontal, X, ChevronDown } from 'lucide-react'
 import { useSearchStore } from '@/lib/stores/searchStore'
 import { useLocationStore } from '@/lib/stores/locationStore'
+import { useAuthStore } from '@/lib/stores/authStore'
 import { BusinessCard, BusinessCardSkeleton } from '@/components/listings/BusinessCard'
 import { LazyMapView } from '@/components/maps/LazyMapView'
-import { deriveMapPins } from '@/lib/utils/mapUtils'
 import apiClient from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -15,24 +15,69 @@ import { cn } from '@/lib/utils'
 // Types
 // ---------------------------------------------------------------------------
 
-type SortOption = 'relevance' | 'distance' | 'rating' | 'newest'
-
-interface SearchResult {
-  id: string
+interface PlaceSummary {
+  placeId: string
   name: string
-  slug?: string | null
-  rating_avg?: number | null
-  review_count?: number | null
-  address?: string | null
-  city?: string | null
-  distance_m?: number | null
-  categories?: { name: string; icon?: string | null; color?: string | null } | null
-  business_photos?: Array<{ url: string; is_primary: boolean }> | null
-  business_hours?: Array<{ day: number; open_time: string | null; close_time: string | null; is_closed: boolean }> | null
+  address: string
+  rating?: number
+  totalRatings?: number
+  photoReference?: string
+  businessStatus?: string
+  openNow?: boolean
+  types?: string[]
+  location: { lat: number; lng: number }
+}
+
+interface SearchResponse {
+  data: PlaceSummary[]
+  meta: { nextPageToken?: string }
+  error: null
 }
 
 // ---------------------------------------------------------------------------
-// Category pills
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps a PlaceSummary from the backend to the shape expected by BusinessCard.
+ */
+function mapPlaceToBusinessCard(place: PlaceSummary) {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1'
+
+  return {
+    id: place.placeId,
+    name: place.name,
+    address: place.address,
+    rating_avg: place.rating ?? null,
+    review_count: place.totalRatings ?? null,
+    categories: place.types?.[0]
+      ? { name: place.types[0].replace(/_/g, ' ') }
+      : null,
+    business_photos: place.photoReference
+      ? [{ url: `${apiBaseUrl}/places/photo?ref=${encodeURIComponent(place.photoReference)}`, is_primary: true }]
+      : null,
+    business_hours: place.openNow != null
+      ? [buildCurrentDayHours(place.openNow)]
+      : null,
+  }
+}
+
+/**
+ * Builds a minimal business_hours entry for the current day
+ * so BusinessCard can display the open/closed badge.
+ */
+function buildCurrentDayHours(openNow: boolean) {
+  const currentDay = new Date().getDay()
+
+  if (!openNow) {
+    return { day: currentDay, open_time: null, close_time: null, is_closed: true }
+  }
+
+  return { day: currentDay, open_time: '00:00', close_time: '23:59', is_closed: false }
+}
+
+// ---------------------------------------------------------------------------
+// Category pills (mapped to Google place types)
 // ---------------------------------------------------------------------------
 
 const CATEGORY_PILLS = [
@@ -40,8 +85,8 @@ const CATEGORY_PILLS = [
   { label: 'Cafe', value: 'cafe' },
   { label: 'Restaurant', value: 'restaurant' },
   { label: 'Bakery', value: 'bakery' },
-  { label: 'Fast Food', value: 'fast-food' },
-  { label: 'More', value: 'more' },
+  { label: 'Bar', value: 'bar' },
+  { label: 'Gym', value: 'gym' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -52,93 +97,149 @@ export default function SearchPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { lat, lng, radius } = useLocationStore()
+  const session = useAuthStore((s) => s.session)
 
   const [query, setQuery] = React.useState(searchParams.get('q') ?? '')
-  const [debouncedQuery, setDebouncedQuery] = React.useState(query)
-  const [sort, setSort] = React.useState<SortOption>('relevance')
+  const [submittedQuery, setSubmittedQuery] = React.useState(searchParams.get('q') ?? '')
   const [openNow, setOpenNow] = React.useState(false)
-  const [minRating, setMinRating] = React.useState<number | null>(null)
   const [selectedCategory, setSelectedCategory] = React.useState(searchParams.get('category') ?? '')
-  const [results, setResults] = React.useState<SearchResult[]>([])
-  const [total, setTotal] = React.useState(0)
-  const [page, setPage] = React.useState(1)
+  const [results, setResults] = React.useState<PlaceSummary[]>([])
   const [loading, setLoading] = React.useState(false)
-  const [hasMore, setHasMore] = React.useState(false)
+  const [loadingMore, setLoadingMore] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [nextPageToken, setNextPageToken] = React.useState<string | undefined>(undefined)
 
-  const observerRef = React.useRef<IntersectionObserver | null>(null)
-  const sentinelRef = React.useRef<HTMLDivElement | null>(null)
+  // Debounce query input 400ms before auto-searching
+  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Debounce query input 300ms
   React.useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(query), 300)
-    return () => clearTimeout(t)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      if (query.trim()) {
+        setSubmittedQuery(query.trim())
+      }
+    }, 400)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
   }, [query])
 
-  // Fetch results when query/filters/location change
+  // Fetch results when submittedQuery/filters/location change
   React.useEffect(() => {
-    if (!lat || !lng) return
-    setPage(1)
-    setResults([])
-    fetchResults(1, true)
+    if (!submittedQuery) {
+      setResults([])
+      setNextPageToken(undefined)
+      return
+    }
+    fetchResults(submittedQuery, undefined)
+    recordSearchHistory(submittedQuery)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, sort, openNow, minRating, selectedCategory, lat, lng, radius])
+  }, [submittedQuery, openNow, selectedCategory, lat, lng])
 
-  async function fetchResults(pageNum: number, reset = false) {
-    if (!lat || !lng) return
-    setLoading(true)
+  /**
+   * Fetch search results from /places/search.
+   */
+  async function fetchResults(searchQuery: string, pageToken: string | undefined) {
+    if (!searchQuery.trim()) return
+
+    if (pageToken) {
+      setLoadingMore(true)
+    } else {
+      setLoading(true)
+      setError(null)
+      setResults([])
+      setNextPageToken(undefined)
+    }
+
     try {
-      const params = new URLSearchParams({
-        lat: String(lat),
-        lng: String(lng),
-        radius: String(radius),
-        sort,
-        page: String(pageNum),
-        limit: '20',
-      })
-      if (debouncedQuery.trim()) params.set('q', debouncedQuery.trim())
-      if (minRating) params.set('min_rating', String(minRating))
-      if (selectedCategory) params.set('category', selectedCategory)
+      const params = new URLSearchParams({ q: searchQuery.trim() })
 
-      const res = await apiClient.get<{
-        data: SearchResult[]
-        meta: { page: number; total: number; hasNextPage: boolean }
-      }>(`/businesses/search?${params}`)
+      if (lat != null && lng != null) {
+        params.set('lat', String(lat))
+        params.set('lng', String(lng))
+        // Convert radius from km to meters
+        params.set('radius', String(Math.min(radius * 1000, 50000)))
+      }
 
+      if (selectedCategory) params.set('type', selectedCategory)
+      if (openNow) params.set('openNow', 'true')
+      if (pageToken) params.set('pageToken', pageToken)
+
+      const res = await apiClient.get<SearchResponse>(`/places/search?${params}`)
       const { data, meta } = res.data
-      setResults((prev) => (reset ? data : [...prev, ...data]))
-      setTotal(meta.total)
-      setHasMore(meta.hasNextPage)
-    } catch {
-      // silently fail
+
+      if (pageToken) {
+        setResults((prev) => [...prev, ...data])
+      } else {
+        setResults(data)
+      }
+      setNextPageToken(meta.nextPageToken)
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.error?.message ||
+        'Unable to search places. Please try again.'
+      if (!pageToken) {
+        setError(message)
+      }
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }
 
-  // Infinite scroll
-  React.useEffect(() => {
-    if (observerRef.current) observerRef.current.disconnect()
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          const nextPage = page + 1
-          setPage(nextPage)
-          fetchResults(nextPage)
-        }
-      },
-      { threshold: 0.1 }
-    )
-    if (sentinelRef.current) observerRef.current.observe(sentinelRef.current)
-    return () => observerRef.current?.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasMore, loading, page])
+  /**
+   * Record search history for authenticated users.
+   * POST /user/search-history with { query, lat, lng }
+   */
+  async function recordSearchHistory(searchQuery: string) {
+    if (!session?.access_token) return
+    if (!searchQuery.trim()) return
+
+    try {
+      await apiClient.post('/user/search-history', {
+        query: searchQuery.trim(),
+        lat: lat ?? undefined,
+        lng: lng ?? undefined,
+      })
+    } catch {
+      // Silently fail — search history recording is non-blocking
+    }
+  }
+
+  /**
+   * Handle explicit search submission (e.g. pressing Enter).
+   */
+  function handleSearchSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (query.trim()) {
+      setSubmittedQuery(query.trim())
+    }
+  }
+
+  /**
+   * Load more results using nextPageToken.
+   */
+  function handleLoadMore() {
+    if (nextPageToken && submittedQuery) {
+      fetchResults(submittedQuery, nextPageToken)
+    }
+  }
+
+  // Map results to the format expected by map view
+  const mapPins = results.map((place) => ({
+    id: place.placeId,
+    lat: place.location.lat,
+    lng: place.location.lng,
+    name: place.name,
+  }))
 
   return (
     <div className="flex flex-col h-dvh bg-gray-50">
       {/* Top bar: back + search + map button */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 pt-4 pb-3">
-        <div className="flex items-center gap-2">
+        <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => router.back()}
             className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"
             aria-label="Go back"
@@ -156,13 +257,18 @@ export default function SearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search restaurants, cafes..."
-              aria-label="Search businesses"
+              aria-label="Search places"
               className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-white transition-all"
             />
             {query && (
               <button
                 type="button"
-                onClick={() => setQuery('')}
+                onClick={() => {
+                  setQuery('')
+                  setSubmittedQuery('')
+                  setResults([])
+                  setNextPageToken(undefined)
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                 aria-label="Clear search"
               >
@@ -175,7 +281,7 @@ export default function SearchPage() {
             type="button"
             onClick={() => {
               useSearchStore.getState().setViewMode('map')
-              useSearchStore.getState().setResults(results as any[], total)
+              useSearchStore.getState().setResults(results.map(mapPlaceToBusinessCard) as any[], results.length)
               router.push('/search/map')
             }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-primary text-primary text-sm font-medium hover:bg-blue-50 transition-colors flex-shrink-0"
@@ -183,7 +289,7 @@ export default function SearchPage() {
             <MapPin className="h-3.5 w-3.5" />
             Map
           </button>
-        </div>
+        </form>
 
         {/* Location bar */}
         <div className="flex items-center gap-2 mt-3 px-1">
@@ -212,25 +318,6 @@ export default function SearchPage() {
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
             Open now
-          </button>
-          <button
-            onClick={() => setMinRating(minRating === 4 ? null : 4)}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border flex-shrink-0 transition-colors',
-              minRating === 4 ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-white border-gray-200 text-gray-600'
-            )}
-          >
-            <Star className="h-3 w-3 text-yellow-400" />
-            Top rated
-          </button>
-          <button
-            onClick={() => setSort('distance')}
-            className={cn(
-              'px-3 py-1.5 rounded-full text-xs font-medium border flex-shrink-0 transition-colors',
-              sort === 'distance' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-600'
-            )}
-          >
-            Nearest
           </button>
           <button
             className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-200 text-gray-600 bg-white flex-shrink-0"
@@ -262,12 +349,11 @@ export default function SearchPage() {
       {lat && lng && results.length > 0 ? (
         <div className="mx-4 mt-3 rounded-xl overflow-hidden border border-gray-200 h-28">
           <LazyMapView
-            markers={deriveMapPins(results as any[])}
+            markers={mapPins}
             center={{ lat, lng }}
             zoom={13}
             onMarkerClick={(id) => {
-              const biz = results.find((b) => b.id === id)
-              router.push(`/listing/${biz?.slug || id}`)
+              router.push(`/listing/${id}`)
             }}
             className="h-28 rounded-none"
           />
@@ -278,11 +364,11 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Results count + sort */}
+      {/* Results count */}
       <div className="flex items-center justify-between px-4 mt-3 mb-2">
         {!loading && results.length > 0 && (
           <p className="text-xs text-gray-500 font-medium">
-            {total} result{total !== 1 ? 's' : ''} found
+            {results.length} result{results.length !== 1 ? 's' : ''} found
           </p>
         )}
         {!loading && results.length === 0 && <span />}
@@ -295,31 +381,65 @@ export default function SearchPage() {
       {/* Results list */}
       <div className="flex-1 overflow-y-auto px-4 pb-24">
         <div className="flex flex-col gap-3">
-          {results.map((business) => (
+          {results.map((place) => (
             <BusinessCard
-              key={business.id}
-              business={business}
-              onClick={() => router.push(`/listing/${business.slug || business.id}`)}
+              key={place.placeId}
+              business={mapPlaceToBusinessCard(place)}
+              onClick={() => router.push(`/listing/${place.placeId}`)}
             />
           ))}
 
-          {loading &&
+          {/* Loading skeletons */}
+          {(loading || loadingMore) &&
             Array.from({ length: 4 }).map((_, i) => (
-              <BusinessCardSkeleton key={i} />
+              <BusinessCardSkeleton key={`skeleton-${i}`} />
             ))}
 
-          {/* Infinite scroll sentinel */}
-          <div ref={sentinelRef} className="h-4" aria-hidden="true" />
+          {/* Load More button for pagination */}
+          {!loading && !loadingMore && nextPageToken && (
+            <button
+              onClick={handleLoadMore}
+              className="w-full py-3 mt-2 rounded-xl border border-gray-200 bg-white text-sm font-medium text-primary hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
+            >
+              Load More
+            </button>
+          )}
+
+          {/* Error state */}
+          {!loading && error && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <span className="text-5xl mb-4" aria-hidden="true">⚠️</span>
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Something went wrong</h3>
+              <p className="text-sm text-gray-500 max-w-xs">{error}</p>
+              <button
+                onClick={() => submittedQuery && fetchResults(submittedQuery, undefined)}
+                className="mt-4 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Try again
+              </button>
+            </div>
+          )}
 
           {/* Empty state */}
-          {!loading && results.length === 0 && (
+          {!loading && !error && submittedQuery && results.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <span className="text-5xl mb-4" aria-hidden="true">🔍</span>
               <h3 className="text-base font-semibold text-gray-900 mb-1">No results found</h3>
               <p className="text-sm text-gray-500 max-w-xs">
                 {!lat || !lng
-                  ? 'Enable location to search nearby businesses.'
-                  : 'Try broadening your search radius or changing your query.'}
+                  ? 'Enable location to search nearby places.'
+                  : 'Try a different search term or adjust your filters.'}
+              </p>
+            </div>
+          )}
+
+          {/* Initial state (no query) */}
+          {!loading && !error && !submittedQuery && results.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <span className="text-5xl mb-4" aria-hidden="true">🗺️</span>
+              <h3 className="text-base font-semibold text-gray-900 mb-1">Search for places</h3>
+              <p className="text-sm text-gray-500 max-w-xs">
+                Type a query above to discover restaurants, cafes, and more nearby.
               </p>
             </div>
           )}
@@ -330,7 +450,7 @@ export default function SearchPage() {
       <button
         onClick={() => {
           useSearchStore.getState().setViewMode('map')
-          useSearchStore.getState().setResults(results as any[], total)
+          useSearchStore.getState().setResults(results.map(mapPlaceToBusinessCard) as any[], results.length)
           router.push('/search/map')
         }}
         className="fixed bottom-20 right-4 z-20 flex items-center gap-2 px-4 py-2.5 rounded-full bg-primary text-white text-sm font-medium shadow-lg hover:bg-blue-700 transition-colors"

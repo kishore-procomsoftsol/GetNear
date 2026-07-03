@@ -5,6 +5,8 @@ import { authenticate } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { sendSuccess, sendError } from '../utils/response'
 import { PLUS_LIMITS } from '@getnear/config'
+import { cacheService } from '../lib/placesCache'
+import * as googlePlaces from '../lib/googlePlaces'
 
 const router = Router()
 
@@ -31,83 +33,80 @@ async function isUserPlus(userId: string): Promise<boolean> {
 /**
  * GET /user/saved
  *
- * Returns the authenticated user's saved places with joined business data.
- * Supports sort query param: recently_added | nearest | rating
+ * Returns the authenticated user's saved places with resolved place data
+ * from cache or Google Places API.
  *
- * Requirements: 5.1, 5.5
+ * Requirements: 6.1, 6.2
  */
 router.get('/saved', async (req, res) => {
-  const { sort = 'recently_added', lat, lng } = req.query
   const userId = req.user!.id
 
-  let query = supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('saved_places')
-    .select(`
-      id,
-      collection_id,
-      created_at,
-      businesses (
-        id,
-        name,
-        slug,
-        description,
-        rating_avg,
-        review_count,
-        address,
-        city,
-        status,
-        business_photos (
-          id,
-          url,
-          is_primary
-        ),
-        categories (
-          id,
-          name,
-          slug,
-          icon,
-          color
-        )
-      )
-    `)
+    .select('id, place_id, collection_id, created_at')
     .eq('user_id', userId)
-
-  if (sort === 'rating') {
-    // Sort by business rating descending — done client-side after fetch
-    // since Supabase doesn't support ordering by joined columns directly
-  }
-
-  const { data, error } = await query.order('created_at', { ascending: sort !== 'recently_added' ? true : false })
+    .order('created_at', { ascending: false })
 
   if (error) {
     return sendError(res, 'FETCH_FAILED', error.message, 500)
   }
 
-  let results = data ?? []
+  const savedEntries = data ?? []
 
-  // Apply rating sort post-fetch
-  if (sort === 'rating') {
-    results = results.sort((a: any, b: any) => {
-      const ratingA = (a.businesses as any)?.rating_avg ?? 0
-      const ratingB = (b.businesses as any)?.rating_avg ?? 0
-      return ratingB - ratingA
+  // Resolve Place IDs to display data via cache/Google
+  const results = await Promise.all(
+    savedEntries.map(async (entry) => {
+      const cacheKey = cacheService.buildKey('details', { placeId: entry.place_id })
+      const cached = await cacheService.get(cacheKey)
+
+      if (cached) {
+        const placeData = cached.response_data as googlePlaces.PlaceDetailsResult
+        return {
+          id: entry.id,
+          place_id: entry.place_id,
+          collection_id: entry.collection_id,
+          created_at: entry.created_at,
+          place: placeData,
+        }
+      }
+
+      // Cache miss — fetch from Google
+      try {
+        const fields = [
+          'place_id',
+          'name',
+          'formatted_address',
+          'rating',
+          'user_ratings_total',
+          'photos',
+          'business_status',
+          'types',
+          'geometry',
+        ]
+        const details = await googlePlaces.placeDetails(entry.place_id, fields)
+
+        // Store in cache for future lookups
+        await cacheService.set(cacheKey, entry.place_id, 'details', details)
+
+        return {
+          id: entry.id,
+          place_id: entry.place_id,
+          collection_id: entry.collection_id,
+          created_at: entry.created_at,
+          place: details,
+        }
+      } catch {
+        // If Google lookup fails, return entry without place data
+        return {
+          id: entry.id,
+          place_id: entry.place_id,
+          collection_id: entry.collection_id,
+          created_at: entry.created_at,
+          place: null,
+        }
+      }
     })
-  }
-
-  // Apply nearest sort if lat/lng provided
-  if (sort === 'nearest' && lat && lng) {
-    const userLat = parseFloat(lat as string)
-    const userLng = parseFloat(lng as string)
-    if (!isNaN(userLat) && !isNaN(userLng)) {
-      results = results.sort((a: any, b: any) => {
-        const bA = a.businesses as any
-        const bB = b.businesses as any
-        const distA = bA ? Math.hypot(bA.lat - userLat, bA.lng - userLng) : Infinity
-        const distB = bB ? Math.hypot(bB.lat - userLat, bB.lng - userLng) : Infinity
-        return distA - distB
-      })
-    }
-  }
+  )
 
   sendSuccess(res, results)
 })
@@ -115,30 +114,30 @@ router.get('/saved', async (req, res) => {
 /**
  * POST /user/saved
  *
- * Saves a business for the authenticated user.
+ * Saves a place for the authenticated user using Google Place ID.
  * Enforces 10-item free-tier limit (403 SAVE_LIMIT_REACHED).
  * Returns 409 ALREADY_SAVED on duplicate.
  *
- * Requirements: 5.1, 5.5, 5.10, 16.1
+ * Requirements: 6.1, 6.4, 6.5
  */
 router.post('/saved', async (req, res) => {
-  const { business_id, collection_id } = req.body
+  const { placeId, collection_id } = req.body
   const userId = req.user!.id
 
-  if (!business_id) {
-    return sendError(res, 'VALIDATION_ERROR', 'business_id is required', 400)
+  if (!placeId || typeof placeId !== 'string' || !placeId.trim()) {
+    return sendError(res, 'VALIDATION_ERROR', 'placeId is required', 400)
   }
 
-  // Check for duplicate
+  // Check for duplicate (unique constraint on user_id + place_id)
   const { data: existing } = await supabaseAdmin
     .from('saved_places')
     .select('id')
     .eq('user_id', userId)
-    .eq('business_id', business_id)
+    .eq('place_id', placeId)
     .maybeSingle()
 
   if (existing) {
-    return sendError(res, 'ALREADY_SAVED', 'Business is already saved', 409)
+    return sendError(res, 'ALREADY_SAVED', 'Place already saved', 409)
   }
 
   // Enforce free-tier limit
@@ -163,13 +162,17 @@ router.post('/saved', async (req, res) => {
     .from('saved_places')
     .insert({
       user_id: userId,
-      business_id,
+      place_id: placeId,
       collection_id: collection_id ?? null,
     })
     .select()
     .single()
 
   if (error) {
+    // Handle unique constraint violation at DB level as fallback
+    if (error.code === '23505') {
+      return sendError(res, 'ALREADY_SAVED', 'Place already saved', 409)
+    }
     return sendError(res, 'SAVE_FAILED', error.message, 500)
   }
 
@@ -177,21 +180,21 @@ router.post('/saved', async (req, res) => {
 })
 
 /**
- * DELETE /user/saved/:id
+ * DELETE /user/saved/:placeId
  *
- * Removes a saved place. Verifies ownership before deletion.
+ * Removes a saved place by its Google Place ID. Verifies ownership before deletion.
  *
- * Requirements: 5.5
+ * Requirements: 6.3
  */
-router.delete('/saved/:id', async (req, res) => {
-  const { id } = req.params
+router.delete('/saved/:placeId', async (req, res) => {
+  const { placeId } = req.params
   const userId = req.user!.id
 
-  // Verify ownership
+  // Verify ownership by place_id
   const { data: existing } = await supabaseAdmin
     .from('saved_places')
     .select('id')
-    .eq('id', id)
+    .eq('place_id', placeId)
     .eq('user_id', userId)
     .maybeSingle()
 
@@ -202,7 +205,7 @@ router.delete('/saved/:id', async (req, res) => {
   const { error } = await supabaseAdmin
     .from('saved_places')
     .delete()
-    .eq('id', id)
+    .eq('place_id', placeId)
     .eq('user_id', userId)
 
   if (error) {

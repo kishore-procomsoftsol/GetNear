@@ -11,9 +11,8 @@ import { NextRequest, NextResponse } from 'next/server'
  *  3. Upsert the authenticated user into the public `users` table so that
  *     the row exists even if this is the user's first OAuth sign-in.
  *  4. Read the user's role and redirect to the role-appropriate entry screen:
- *       business → /dashboard
  *       admin    → /admin
- *       customer → /
+ *       all others → /
  *  5. On any error, redirect to /login?error=oauth_failed.
  *
  * Requirements: 1.5, 1.7
@@ -113,12 +112,10 @@ export async function GET(request: NextRequest) {
 
 /**
  * Returns the role-appropriate home URL.
- *  business → /dashboard
  *  admin    → /admin
- *  customer → /
+ *  all others → /
  */
 function roleHome(role: string, origin: string): string {
-  if (role === 'business') return `${origin}/dashboard`
   if (role === 'admin') return `${origin}/admin`
   return `${origin}/`
 }

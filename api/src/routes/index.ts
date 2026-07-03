@@ -7,7 +7,7 @@ import messagesRouter from './messages';
 import notificationsRouter from './notifications';
 import reviewsRouter from './reviews';
 import searchHistoryRouter from './searchHistory';
-import dashboardRouter from './dashboard';
+import placesRouter from './places';
 import adminRouter from './admin';
 
 const router = Router();
@@ -23,7 +23,7 @@ router.use('/user/bookings', bookingsRouter);
 router.use('/user/messages', messagesRouter);
 router.use('/user/notifications', notificationsRouter);
 router.use('/user/search-history', searchHistoryRouter);
-router.use('/dashboard', dashboardRouter);
+router.use('/places', placesRouter);
 router.use('/admin', adminRouter);
 
 // Geocode proxy (avoids CORS issues with Google Maps API from browser)

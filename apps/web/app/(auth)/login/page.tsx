@@ -33,8 +33,7 @@ export default function LoginPage() {
     const { access_token, refresh_token, user } = res.data.data
     setSession({ access_token, refresh_token } as any)
     setUser(user)
-    if (user.role === 'business') router.push('/dashboard')
-    else if (user.role === 'admin') router.push('/admin')
+    if (user.role === 'admin') router.push('/admin')
     else router.push('/')
   }
 

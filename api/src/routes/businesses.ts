@@ -105,13 +105,27 @@ router.get('/search', searchLimiter, optionalAuth, async (req, res) => {
   const total = rows.length > 0 ? Number(rows[0].total_count) : 0
 
   // Record search history for authenticated users with a non-empty query
+  // Deduplication: skip if same query was recorded within the last 60 seconds
   if (req.user && (q as string).trim()) {
-    await supabaseAdmin.from('search_history').insert({
-      user_id: req.user.id,
-      query: (q as string).trim(),
-      lat: latNum,
-      lng: lngNum,
-    })
+    const trimmedQuery = (q as string).trim()
+    const sixtySecondsAgo = new Date(Date.now() - 60 * 1000).toISOString()
+
+    const { data: recentDuplicate } = await supabaseAdmin
+      .from('search_history')
+      .select('id')
+      .eq('user_id', req.user.id)
+      .eq('query', trimmedQuery)
+      .gte('created_at', sixtySecondsAgo)
+      .limit(1)
+
+    if (!recentDuplicate || recentDuplicate.length === 0) {
+      await supabaseAdmin.from('search_history').insert({
+        user_id: req.user.id,
+        query: trimmedQuery,
+        lat: latNum,
+        lng: lngNum,
+      })
+    }
   }
 
   // Strip the internal total_count field from each result row
