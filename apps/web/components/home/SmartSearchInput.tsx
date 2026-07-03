@@ -157,11 +157,11 @@ export function SmartSearchInput({ className }: SmartSearchInputProps) {
               .catch(() => [] as SearchHistoryEntry[])
           : Promise.resolve([] as SearchHistoryEntry[]),
 
-        // Fetch businesses only if location is available
+        // Fetch places only if location is available
         lat != null && lng != null
           ? apiClient
-              .get<{ data: BusinessSuggestion[] }>('/businesses/search', {
-                params: { q: searchQuery, lat, lng, limit: 5 },
+              .get<{ data: BusinessSuggestion[] }>('/places/search', {
+                params: { q: searchQuery, lat, lng },
               })
               .then((res) => (res.data.data ?? []).slice(0, 5))
               .catch(() => [] as BusinessSuggestion[])

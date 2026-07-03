@@ -91,22 +91,20 @@ export default function CityPage() {
       const params = new URLSearchParams({
         lat: String(cityData.lat),
         lng: String(cityData.lng),
-        radius: String(radius || 10),
-        sort,
-        page: String(pageNum),
-        limit: '20',
+        radius: String((radius || 10) * 1000),
       })
       if (debouncedQuery.trim()) params.set('q', debouncedQuery.trim())
+      else params.set('q', `places in ${cityData.name}`)
 
       const res = await apiClient.get<{
         data: SearchResult[]
         meta: { page: number; total: number; hasNextPage: boolean }
-      }>(`/businesses/search?${params}`)
+      }>(`/places/search?${params}`)
 
-      const { data, meta } = res.data
+      const { data } = res.data
       setResults((prev) => (reset ? data : [...prev, ...data]))
-      setTotal(meta.total)
-      setHasMore(meta.hasNextPage)
+      setTotal(data.length)
+      setHasMore(false)
     } catch {
       // silently fail
     } finally {
