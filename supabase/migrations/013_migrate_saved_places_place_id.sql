@@ -18,6 +18,12 @@ ALTER TABLE saved_places DROP CONSTRAINT IF EXISTS saved_places_user_id_business
 ALTER TABLE saved_places DROP COLUMN IF EXISTS business_id;
 
 -- ---------------------------------------------------------------------------
+-- Remove existing rows (they reference internal business IDs that no longer exist)
+-- ---------------------------------------------------------------------------
+
+DELETE FROM saved_places;
+
+-- ---------------------------------------------------------------------------
 -- Add place_id column (Google Place ID)
 -- ---------------------------------------------------------------------------
 
