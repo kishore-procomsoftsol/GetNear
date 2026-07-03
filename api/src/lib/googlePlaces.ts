@@ -154,7 +154,7 @@ const TIMEOUT_MS = 5000;
 // ---------------------------------------------------------------------------
 
 function getApiKey(): string {
-  const key = process.env.GOOGLE_PLACES_API_KEY;
+  const key = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
   if (!key) {
     console.error('[GooglePlaces] GOOGLE_PLACES_API_KEY is not configured');
     throw new ConfigError();
